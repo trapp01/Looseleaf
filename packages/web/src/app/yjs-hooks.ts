@@ -49,6 +49,8 @@ export function useYValue<T>(target: Observable | null, read: () => T, key: unkn
         version.current++;
         notify();
       };
+      // React subscribes after the first render. A change in between reaches no observer, so the cached value is dropped here and read again.
+      version.current++;
       if (target instanceof Y.Doc) {
         target.on('update', onChange);
         return () => target.off('update', onChange);
