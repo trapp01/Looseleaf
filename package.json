@@ -1,0 +1,28 @@
+{
+  "name": "looseleaf",
+  "description": "An open-source, self-hosted notebook app laid out like OneNote, with offline editing and sync through your own server.",
+  "private": true,
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trapp01/Looseleaf.git"
+  },
+  "homepage": "https://github.com/trapp01/Looseleaf#readme",
+  "bugs": "https://github.com/trapp01/Looseleaf/issues",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "pnpm -r --workspace-concurrency=1 test",
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @looseleaf/server --filter @looseleaf/web --parallel dev"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

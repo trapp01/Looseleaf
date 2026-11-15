@@ -1,0 +1,12 @@
+.git
+**/node_modules
+**/dist
+**/out
+data
+**/*.log
+.DS_Store
+*.one
+*.onetoc2
+*.onepkg
+.env
+.env.*

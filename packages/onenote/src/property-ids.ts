@@ -1,0 +1,86 @@
+/**
+ * PropertyID values from the [MS-ONE] 2.1.12 table, named as in the spec.
+ * Only the properties this reader uses are listed. Several structures share
+ * one id (the ElementChildNodesOf* and ContentChildNodesOf* families); each
+ * gets one name here and the comment lists the others.
+ */
+export const PropertyId = {
+  LayoutTightLayout: 0x08001c00,
+  PageWidth: 0x14001c01,
+  PageHeight: 0x14001c02,
+  OutlineElementChildLevel: 0x0c001c03,
+  Bold: 0x08001c04,
+  Italic: 0x08001c05,
+  Underline: 0x08001c06,
+  Strikethrough: 0x08001c07,
+  Superscript: 0x08001c08,
+  Subscript: 0x08001c09,
+  Font: 0x1c001c0a,
+  FontSize: 0x10001c0b,
+  FontColor: 0x14001c0c,
+  Highlight: 0x14001c0d,
+  OffsetFromParentHoriz: 0x14001c14,
+  OffsetFromParentVert: 0x14001c15,
+  NumberListFormat: 0x1c001c1a,
+  /** LayoutMaxWidth, and LayoutMaxWidthInOutline on outlines and table cells. */
+  LayoutMaxWidth: 0x14001c1b,
+  LayoutMaxHeight: 0x14001c1c,
+  /** ContentChildNodesOfOutlineElement and ContentChildNodesOfPageManifest. */
+  ContentChildNodes: 0x24001c1f,
+  /** Every ElementChildNodesOf* structure: section, page, title, outline, outline element, table, row, cell. */
+  ElementChildNodes: 0x24001c20,
+  RichEditTextUnicode: 0x1c001c22,
+  ListNodes: 0x24001c26,
+  PictureContainer: 0x20001c3f,
+  CachedTitleString: 0x1c001cf3,
+  TopologyCreationTimeStamp: 0x18001c65,
+  IsTitleText: 0x08001cb4,
+  IsTitleDate: 0x08001cb5,
+  IsTitleTime: 0x08001c87,
+  ListRestart: 0x14001cb7,
+  IsBackground: 0x08001d13,
+  IRecordMedia: 0x14001d24,
+  CachedTitleStringFromPage: 0x1c001d3c,
+  RowCount: 0x14001d57,
+  ColumnCount: 0x14001d58,
+  StructureElementChildNodes: 0x24001d5f,
+  ChildGraphSpaceElementNodes: 0x2c001d63,
+  TableColumnWidths: 0x1c001d66,
+  LastModifiedTimeStamp: 0x18001d77,
+  LastModifiedTime: 0x14001d7a,
+  EmbeddedFileContainer: 0x20001d9b,
+  EmbeddedFileName: 0x1c001d9c,
+  ImageFilename: 0x1c001dd7,
+  IsDeletedGraphSpaceContent: 0x1c001de9,
+  PageLevel: 0x14001dff,
+  TextRunIndex: 0x1c001e12,
+  TextRunFormatting: 0x24001e13,
+  Hyperlink: 0x08001e14,
+  Hidden: 0x08001e16,
+  HyperlinkProtected: 0x08001e19,
+  WzHyperlinkUrl: 0x1c001e20,
+  TextRunIsEmbeddedObject: 0x08001e22,
+  CellShadingColor: 0x14001e26,
+  ImageAltText: 0x1c001e58,
+  MathFormatting: 0x08003401,
+  ParagraphStyle: 0x2000342c,
+  ParagraphStyleId: 0x1c00345a,
+  ActionItemType: 0x10003463,
+  NoteTagShape: 0x10003464,
+  NoteTagHighlightColor: 0x14003465,
+  NoteTagLabel: 0x1c003468,
+  ActionItemStatus: 0x10003470,
+  ParagraphAlignment: 0x0c003477,
+  NoteTagDefinitionOid: 0x20003488,
+  NoteTagStates: 0x04003489,
+  TextExtendedAscii: 0x1c003498,
+  SectionDisplayName: 0x1c00349b,
+  PictureWidth: 0x140034cd,
+  PictureHeight: 0x140034ce,
+  /**
+   * Missing from the 2.1.12 table. jcidSectionMetaData (2.2.31) must set
+   * NotebookColor, and this is the one 4-byte property such objects carry
+   * besides the two schema revisions.
+   */
+  NotebookColor: 0x14001cbe,
+} as const;

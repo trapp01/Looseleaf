@@ -1,0 +1,52 @@
+name: Bug report
+description: Something does not work the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not attach your own notebooks, `.one` files or screenshots of private notes. A small made-up page that shows the problem is what helps.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a page
+        2. …
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Where
+      multiple: true
+      options:
+        - Web client in a desktop browser
+        - Web client on a phone
+        - Desktop app
+        - Server
+        - OneNote import
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and operating system
+      placeholder: Firefox 144 on Fedora 43
+  - type: input
+    id: version
+    attributes:
+      label: Looseleaf version or commit
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server log or browser console output
+      description: Remove the access token if it appears.
+      render: text

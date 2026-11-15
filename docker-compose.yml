@@ -1,0 +1,22 @@
+services:
+  looseleaf:
+    build: .
+    image: looseleaf
+    restart: unless-stopped
+    ports:
+      - "8421:8421"
+    environment:
+      # The access token every device enters once. Set it here or in a .env file next to this one.
+      # Left empty, the server generates a token into the data volume on first start and prints it
+      # in `docker compose logs looseleaf`.
+      LOOSELEAF_TOKEN: ${LOOSELEAF_TOKEN:-}
+      # Daily snapshots to keep under /data/snapshots.
+      LOOSELEAF_SNAPSHOT_KEEP: "14"
+    volumes:
+      # A named volume. To keep the data next to this file instead, use ./data:/data and make
+      # sure ./data is writable by uid 1000, the image's `node` user.
+      - looseleaf-data:/data
+    stop_grace_period: 30s
+
+volumes:
+  looseleaf-data:

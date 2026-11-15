@@ -1,0 +1,13 @@
+export { SyncClient, RECONNECT_MAX_DELAY_MS, RECONNECT_MIN_DELAY_MS, WELCOME_TIMEOUT_MS } from './sync-client.js';
+export type { SyncClientOptions } from './sync-client.js';
+export type { SyncError, SyncErrorKind, SyncState, SyncStatus } from './sync-status.js';
+export { fetchServerInfo, BLOB_TRANSFER_CONCURRENCY } from './blobs.js';
+export { DOC_HANDSHAKE_TIMEOUT_MS, HANDSHAKE_CONCURRENCY } from './session.js';
+export { COMPACT_AFTER_UPDATES } from './replica.js';
+export { MemoryStore, blobHash, hasPendingUpdates, isBlobHash, isReadableUpdate, mergeDocUpdates } from './replica-store.js';
+export type { ClientStore, ReplicaStore, SettingsStore } from './replica-store.js';
+export { openIndexedDbStore, IndexedDbStore, DEFAULT_DATABASE_NAME } from './indexeddb-store.js';
+export type { IdbFactory } from './indexeddb-store.js';
+export { KeyedQueue } from './keyed-queue.js';
+export * from './protocol.js';
+export type { FetchLike, FetchInit, FetchResponse, SocketConstructor, SocketLike } from './transport.js';

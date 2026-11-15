@@ -1,0 +1,28 @@
+{
+  "name": "@looseleaf/server",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MPL-2.0",
+  "type": "module",
+  "main": "src/server.ts",
+  "types": "src/server.ts",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/server.js --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@looseleaf/sync": "workspace:*",
+    "@noble/hashes": "^2.4.0",
+    "lib0": "^0.2.120",
+    "ws": "^8.23.0",
+    "yjs": "^13.6.33"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2",
+    "esbuild": "^0.28.2",
+    "fake-indexeddb": "^6.2.8"
+  }
+}

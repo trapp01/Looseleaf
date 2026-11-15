@@ -1,0 +1,76 @@
+/* Printing (and Save as PDF in a browser) shows only the open page's content. */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  body {
+    overflow: visible;
+    background: #fff;
+  }
+
+  .app,
+  .workspace,
+  .main-area,
+  .phone-pane,
+  .phone-main {
+    display: block !important;
+    height: auto !important;
+    margin: 0 !important;
+    border: 0 !important;
+    padding: 0 !important;
+  }
+
+  .title-bar,
+  .ribbon,
+  .rail,
+  .nav-pane,
+  .nav-panel,
+  .pane-divider,
+  .phone-header,
+  .format-bar,
+  .banner,
+  .container-bar,
+  .container-resize,
+  .dialog-backdrop,
+  .context-menu,
+  .popover {
+    display: none !important;
+  }
+
+  .page-view {
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  .page-sizer {
+    width: auto !important;
+    height: auto !important;
+  }
+
+  .page-zoom {
+    position: static !important;
+    transform: none !important;
+    width: auto !important;
+    background-image: none !important;
+    background-color: #fff !important;
+  }
+
+  .title-block {
+    padding: 0 0 12px !important;
+  }
+
+  .page-title {
+    border-bottom-color: #bbb;
+  }
+
+  .container {
+    border-color: transparent !important;
+  }
+
+  :root {
+    --fg-note: #000;
+    --fg-muted: #555;
+    color-scheme: light;
+  }
+}

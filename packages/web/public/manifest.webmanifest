@@ -1,0 +1,14 @@
+{
+  "name": "Looseleaf",
+  "short_name": "Looseleaf",
+  "description": "Notebooks that sync through your own server.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f2f2",
+  "theme_color": "#7b3fb5",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

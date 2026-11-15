@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Looseleaf app icon: one loose sheet of ruled paper on a blue tile. Source for icon.png and icon.icns. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4C86D9"/>
+      <stop offset="1" stop-color="#2F5FA8"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/>
+  <g transform="rotate(-7 512 520)">
+    <rect x="276" y="206" width="500" height="640" rx="16" fill="#0B1F3F" opacity="0.22" transform="translate(12 18)"/>
+    <rect x="276" y="206" width="500" height="640" rx="16" fill="#FBFAF4"/>
+    <g stroke="#9CC2EA" stroke-width="7">
+      <line x1="276" y1="330" x2="776" y2="330"/>
+      <line x1="276" y1="388" x2="776" y2="388"/>
+      <line x1="276" y1="446" x2="776" y2="446"/>
+      <line x1="276" y1="504" x2="776" y2="504"/>
+      <line x1="276" y1="562" x2="776" y2="562"/>
+      <line x1="276" y1="620" x2="776" y2="620"/>
+      <line x1="276" y1="678" x2="776" y2="678"/>
+      <line x1="276" y1="736" x2="776" y2="736"/>
+      <line x1="276" y1="794" x2="776" y2="794"/>
+    </g>
+    <line x1="372" y1="206" x2="372" y2="846" stroke="#E07070" stroke-width="7"/>
+    <g fill="#3B6FBE">
+      <circle cx="322" cy="300" r="20"/>
+      <circle cx="322" cy="526" r="20"/>
+      <circle cx="322" cy="752" r="20"/>
+    </g>
+  </g>
+</svg>

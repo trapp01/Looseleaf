@@ -1,0 +1,18 @@
+name: Feature request
+description: Something Looseleaf should do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        [docs/onenote-parity.md](https://github.com/trapp01/Looseleaf/blob/main/docs/onenote-parity.md) lists every OneNote feature and whether it is built, planned or not planned. Please check it first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What should it do
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do today instead
