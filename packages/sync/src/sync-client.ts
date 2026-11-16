@@ -7,6 +7,7 @@
 import type * as Y from 'yjs';
 import { BlobSync, type ServerAccess } from './blobs.js';
 import { IndexedDbStore } from './indexeddb-store.js';
+import { Listeners } from './listeners.js';
 import { CLOSE_BAD_TOKEN, CLOSE_PROTOCOL_ERROR, normalizeServerAddress, socketUrl } from './protocol.js';
 import { Replica } from './replica.js';
 import type { ClientStore } from './replica-store.js';
@@ -64,6 +65,8 @@ export class SyncClient {
   private readonly Socket: SocketConstructor;
   private readonly delays: { min: number; max: number };
   private readonly listeners = new Set<(status: SyncStatus) => void>();
+  private readonly docStored = new Listeners<string>();
+  private readonly blobStored = new Listeners<string>();
 
   private access: ServerAccess | null = null;
   private socket: SocketLike | null = null;
@@ -114,6 +117,7 @@ export class SyncClient {
         if (this.replica.unstoredCount() === 0 && this.lastError?.kind === 'store') this.lastError = null;
         this.updateStatus();
       },
+      onStored: (docId) => this.docStored.emit(docId),
     });
     this.blobs = await BlobSync.create(
       store,
@@ -121,6 +125,7 @@ export class SyncClient {
       {
         onChange: () => this.updateStatus(),
         onError: (kind, error) => this.setError(kind, error.message),
+        onStored: (hash) => this.blobStored.emit(hash),
       },
       this.delays,
     );
@@ -152,6 +157,16 @@ export class SyncClient {
   onStatus(listener: (status: SyncStatus) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /** Calls `listener` with a doc's id after this client stores a change to it, made here or from the server. Returns unsubscribe. */
+  onDocStored(listener: (docId: string) => void): () => void {
+    return this.docStored.add(listener);
+  }
+
+  /** Calls `listener` with a blob's hash after this client stores it, put here or downloaded. Returns unsubscribe. */
+  onBlobStored(listener: (hash: string) => void): () => void {
+    return this.blobStored.add(listener);
   }
 
   /**
@@ -244,6 +259,8 @@ export class SyncClient {
     } finally {
       await this.blobs.close();
       this.listeners.clear();
+      this.docStored.clear();
+      this.blobStored.clear();
     }
   }
 

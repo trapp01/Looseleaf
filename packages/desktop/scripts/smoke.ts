@@ -2,7 +2,8 @@
  * Launches the built shell twice against a stub web client and checks, from
  * inside the page, what the real web client relies on: the app:// origin, a
  * secure context, IndexedDB that survives a restart, the bridge, plain-http
- * fetch and ws:// to a local server, and no Node globals. Run with
+ * fetch and ws:// to a local server, no Node globals, and that the mirror
+ * calls refuse to write before a mirror folder is chosen. Run with
  * `pnpm --filter @looseleaf/desktop smoke` (it builds first). Needs a desktop session.
  *
  * `looseleaf-smoke.test` is mapped to 127.0.0.1 inside Chromium so one request
@@ -32,6 +33,7 @@ interface PageReport {
   fetch: Record<string, string>;
   webSocket: Record<string, string>;
   ipcRefusesUngrantedFolder: string;
+  mirrorWithoutFolder: string;
 }
 
 function stubPage(port: number): string {
@@ -86,6 +88,12 @@ const settle = (promise) => withTimeout(promise, 8000).then((v) => v, (e) => 'er
     fetch: {},
     webSocket: {},
     ipcRefusesUngrantedFolder: await settle(window.looseleafShell.listOneNoteFiles('/tmp').then(() => 'listed /tmp')),
+    mirrorWithoutFolder: await settle(window.looseleafShell.mirrorFolder().then(async (folder) => {
+      const manifest = new TextEncoder().encode('{"format":"looseleaf-mirror","version":1,"pages":[]}');
+      const batch = { removals: [], assets: [], pages: [], manifest };
+      const applied = await window.looseleafShell.applyMirrorBatch(batch).then(() => 'applied', (e) => 'error: ' + e.message);
+      return 'folder ' + folder + '; ' + applied;
+    })),
   };
   for (const host of hosts) {
     report.fetch[host] = await settle(fetch('http://' + host + ':' + port + '/ping').then((r) => r.text()));
@@ -170,6 +178,11 @@ function checks(first: PageReport, second: PageReport): Array<[string, boolean, 
       'IPC works and refuses a folder that was never chosen',
       first.ipcRefusesUngrantedFolder.includes('is not inside a folder chosen'),
       first.ipcRefusesUngrantedFolder,
+    ],
+    [
+      'no mirror folder at first, and applying a mirror batch is refused',
+      first.mirrorWithoutFolder.startsWith('folder null;') && first.mirrorWithoutFolder.includes('No mirror folder is chosen'),
+      first.mirrorWithoutFolder,
     ],
   ];
 }

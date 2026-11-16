@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BLOB_TRANSFER_CONCURRENCY, BlobSync } from '../src/blobs.js';
-import { MemoryStore } from '../src/replica-store.js';
+import { blobHash, MemoryStore } from '../src/replica-store.js';
 import type { FetchInit, FetchLike, FetchResponse } from '../src/transport.js';
 
 function response(body: unknown): FetchResponse {
@@ -36,7 +36,7 @@ describe('BlobSync', () => {
     const blobs = await BlobSync.create(
       new MemoryStore(),
       fetch,
-      { onChange: () => undefined, onError: (_kind, error) => errors.push(error.message) },
+      { onChange: () => undefined, onError: (_kind, error) => errors.push(error.message), onStored: () => undefined },
       { min: 20, max: 40 },
     );
     const access = { address: 'http://hub.test', token: 't' };
@@ -50,6 +50,32 @@ describe('BlobSync', () => {
     expect(counts.maxInFlight).toBeLessThanOrEqual(BLOB_TRANSFER_CONCURRENCY);
     expect(counts.maxInFlight).toBeGreaterThan(1);
     expect(errors).toEqual([]);
+    await blobs.close();
+  });
+});
+
+describe('BlobSync onStored', () => {
+  it('reports a blob put here and a blob downloaded on demand, once each is in the store', async () => {
+    const remoteBytes = new TextEncoder().encode('a picture from another device');
+    const remoteHash = blobHash(remoteBytes);
+    const fetch: FetchLike = async (url) =>
+      url.endsWith(remoteHash) ? { ...response({}), arrayBuffer: async () => remoteBytes.slice().buffer } : response({ blobs: [] });
+    const store = new MemoryStore();
+    const stored: string[] = [];
+    const blobs = await BlobSync.create(
+      store,
+      fetch,
+      { onChange: () => undefined, onError: () => undefined, onStored: (hash) => stored.push(hash) },
+      { min: 20, max: 40 },
+    );
+    const localHash = await blobs.put(new TextEncoder().encode('a picture taken here'));
+    expect(stored).toEqual([localHash]);
+    expect(await store.getBlob(localHash)).not.toBeNull();
+
+    blobs.setConfigured({ address: 'http://hub.test', token: 't' });
+    expect(await blobs.get(remoteHash)).toEqual(remoteBytes);
+    expect(stored).toEqual([localHash, remoteHash]);
+    expect(await store.getBlob(remoteHash)).toEqual(remoteBytes);
     await blobs.close();
   });
 });

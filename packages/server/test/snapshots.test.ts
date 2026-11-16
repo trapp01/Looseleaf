@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
@@ -29,6 +29,14 @@ describe('snapshots', () => {
     expect(await takeSnapshotIfMissing(store, 14, new Date(2026, 10, 15, 23, 0))).toBeNull();
   });
 
+  it('leaves the mirror and every other folder out', async () => {
+    const { store } = await storeWithData();
+    await mkdir(join(store.dataDir, 'mirror', 'Work'), { recursive: true });
+    await writeFile(join(store.dataDir, 'mirror', 'Work', 'Page.md'), '# Page\n');
+    const path = await takeSnapshotIfMissing(store, 14, new Date(2026, 10, 16));
+    expect((await readdir(path!)).sort()).toEqual(['blobs', 'docs']);
+  });
+
   it('keeps only the newest snapshots', async () => {
     const { store } = await storeWithData();
     for (let day = 1; day <= 5; day++) await takeSnapshotIfMissing(store, 3, new Date(2026, 10, day));
@@ -53,7 +61,8 @@ describe('snapshots', () => {
     ]);
     const copy = new DiskStore(path!);
     for (const id of ids) expect(textOf(await copy.readUpdates(id))).toBe('abcdef');
-  });
+    // 240 fsynced appends take several seconds when the whole suite shares the disk.
+  }, 20_000);
 
   it('snapshots an empty data folder', async () => {
     const store = new DiskStore(await tempDir());

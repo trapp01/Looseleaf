@@ -1,6 +1,6 @@
 /**
- * Starts the whole server on one port: HTTP routes, the /sync WebSocket and
- * the daily snapshots, over one data folder. `main.ts` calls this with the
+ * Starts the whole server on one port: HTTP routes, the /sync WebSocket, the
+ * daily snapshots and the mirror, over one data folder. `main.ts` calls this with the
  * environment's settings; tests call it directly.
  */
 import { createServer } from 'node:http';
@@ -13,6 +13,7 @@ import { loadOrCreateToken } from './access-token.js';
 import { DiskStore } from './disk-store.js';
 import { createHttpHandler } from './http.js';
 import { Hub } from './hub.js';
+import { Mirror, type MirrorView } from './mirror.js';
 import { DEFAULT_SNAPSHOT_KEEP, startSnapshots } from './snapshots.js';
 import packageJson from '../package.json' with { type: 'json' };
 
@@ -32,6 +33,10 @@ export interface ServerOptions {
   snapshotKeep?: number;
   /** Docs kept loaded in memory; see DOC_CACHE_SIZE. */
   docCacheSize?: number;
+  /** Keeps data/mirror/ as Markdown; on unless false. */
+  mirror?: boolean;
+  /** See MIRROR_DELAY_MS. */
+  mirrorDelayMs?: number;
 }
 
 export interface RunningServer {
@@ -46,7 +51,9 @@ export interface RunningServer {
   webDir: string | null;
   hub: Hub;
   store: DiskStore;
-  /** Stops accepting work, closes every socket, waits for pending writes and snapshots. */
+  /** Null when the mirror is off. */
+  mirror: MirrorView | null;
+  /** Stops accepting work, closes every socket, waits for pending writes, snapshots and a mirror plan in progress. */
   close(): Promise<void>;
 }
 
@@ -57,7 +64,11 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   await store.init();
   const access = await loadOrCreateToken(options.dataDir, options.token);
   const webDir = await usableWebDir(options.webDir ?? null);
-  const hub = new Hub(store, access.token, { docCacheSize: options.docCacheSize });
+  const mirror = options.mirror === false ? null : new Mirror(store, { delayMs: options.mirrorDelayMs });
+  const hub = new Hub(store, access.token, {
+    docCacheSize: options.docCacheSize,
+    onDocStored: mirror === null ? undefined : (docId) => mirror.docStored(docId),
+  });
   const http = createServer(
     createHttpHandler({
       store,
@@ -65,6 +76,8 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
       version: SERVER_VERSION,
       maxBlobBytes: options.maxBlobBytes ?? DEFAULT_MAX_BLOB_BYTES,
       webDir,
+      mirror,
+      onBlobStored: mirror === null ? undefined : (hash) => mirror.blobStored(hash),
     }),
   );
   const sockets = new WebSocketServer({ noServer: true });
@@ -87,6 +100,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   const address = http.address();
   if (address === null || typeof address === 'string') throw new Error('The HTTP server has no TCP address');
   const stopSnapshots = startSnapshots(store, options.snapshotKeep ?? DEFAULT_SNAPSHOT_KEEP);
+  mirror?.start();
 
   let closing: Promise<void> | null = null;
   const close = () => {
@@ -97,6 +111,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
       http.closeAllConnections();
       await httpClosed;
       await store.drain();
+      await mirror?.close();
       await stopSnapshots();
     })();
     return closing;
@@ -111,6 +126,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
     webDir,
     hub,
     store,
+    mirror,
     close,
   };
 }

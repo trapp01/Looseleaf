@@ -56,6 +56,8 @@ interface CachedDoc {
 
 export interface HubOptions {
   docCacheSize?: number;
+  /** Called with a doc's id each time an update to it is on disk. It must not throw or block. */
+  onDocStored?: (docId: string) => void;
 }
 
 export class Hub {
@@ -63,6 +65,7 @@ export class Hub {
   private readonly docs = new Map<string, CachedDoc>();
   private readonly queue = new KeyedQueue();
   private readonly docCacheSize: number;
+  private readonly onDocStored: ((docId: string) => void) | undefined;
   private readonly pingTimer: ReturnType<typeof setInterval>;
   private closing = false;
 
@@ -72,6 +75,7 @@ export class Hub {
     options: HubOptions = {},
   ) {
     this.docCacheSize = options.docCacheSize ?? DOC_CACHE_SIZE;
+    this.onDocStored = options.onDocStored;
     this.pingTimer = setInterval(() => this.pingAll(), PING_INTERVAL_MS);
     this.pingTimer.unref();
   }
@@ -224,6 +228,11 @@ export class Hub {
   private async storeChange(docId: string, cached: CachedDoc, update: Uint8Array): Promise<void> {
     await this.store.appendUpdate(docId, update);
     cached.storedCount += 1;
+    try {
+      this.onDocStored?.(docId);
+    } catch (error) {
+      console.error(`A listener for stored updates failed on doc "${docId}"; the update is stored`, error);
+    }
   }
 
   private relay(from: Connection, docId: string, change: Uint8Array): void {

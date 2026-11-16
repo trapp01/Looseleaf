@@ -22,6 +22,11 @@ const bridge: ShellBridge = {
   pickFolder: () => ipcRenderer.invoke(CHANNELS.pickFolder),
   listOneNoteFiles: (folder) => ipcRenderer.invoke(CHANNELS.listOneNoteFiles, folder),
   readOneNoteFile: (folder, path) => ipcRenderer.invoke(CHANNELS.readOneNoteFile, folder, path),
+  chooseMirrorFolder: () => ipcRenderer.invoke(CHANNELS.chooseMirrorFolder),
+  mirrorFolder: () => ipcRenderer.invoke(CHANNELS.mirrorFolder),
+  stopMirroring: () => ipcRenderer.invoke(CHANNELS.stopMirroring),
+  readMirrorManifest: () => ipcRenderer.invoke(CHANNELS.readMirrorManifest),
+  applyMirrorBatch: (batch) => ipcRenderer.invoke(CHANNELS.applyMirrorBatch, batch),
   onMenuCommand(listener) {
     if (typeof listener !== 'function') throw new TypeError('onMenuCommand needs a function');
     const forward = (_event: IpcRendererEvent, command: MenuCommand) => listener(command);

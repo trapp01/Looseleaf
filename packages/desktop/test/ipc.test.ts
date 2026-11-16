@@ -1,3 +1,4 @@
+import { mkdtempSync } from 'node:fs';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,6 +17,7 @@ function setup(options: { home?: string; savePath?: string | null; folder?: stri
     env: {},
     saveFolder: SAVE_FOLDER,
     writeFile,
+    mirrorSettingFile: join(mkdtempSync(join(tmpdir(), 'looseleaf-user-data-')), 'mirror-folder.json'),
   });
   const host = {
     showSaveDialog: vi.fn(async (_defaultPath: string, _filters: Array<{ name: string; extensions: string[] }>) =>
@@ -64,6 +66,17 @@ describe('every handler checks its arguments', () => {
     [CHANNELS.readOneNoteFile, ['/a']],
     [CHANNELS.readOneNoteFile, ['/a', 3]],
     [CHANNELS.readOneNoteFile, [null, 'x.one']],
+    [CHANNELS.chooseMirrorFolder, ['/elsewhere']],
+    [CHANNELS.mirrorFolder, ['extra']],
+    [CHANNELS.stopMirroring, ['extra']],
+    [CHANNELS.readMirrorManifest, ['/elsewhere']],
+    [CHANNELS.applyMirrorBatch, []],
+    [CHANNELS.applyMirrorBatch, ['/elsewhere', { removals: [], assets: [], pages: [], manifest: new Uint8Array() }]],
+    [CHANNELS.applyMirrorBatch, [{ removals: [], assets: [], pages: [] }]],
+    [CHANNELS.applyMirrorBatch, [{ removals: [3], assets: [], pages: [], manifest: new Uint8Array() }]],
+    [CHANNELS.applyMirrorBatch, [{ removals: [], assets: [{ path: 'assets/a.png', hash: 'x' }], pages: [], manifest: new Uint8Array() }]],
+    [CHANNELS.applyMirrorBatch, [{ removals: [], assets: [], pages: [{ path: 'a.md', bytes: 'text' }], manifest: new Uint8Array() }]],
+    [CHANNELS.applyMirrorBatch, [{ removals: [], assets: [], pages: [], manifest: new TextEncoder().encode('{}') }]],
   ];
   it.each(badCalls)('%s rejects %j', async (channel, args) => {
     const { handlers, host, writeFile } = setup();

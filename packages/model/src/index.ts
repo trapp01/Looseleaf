@@ -1,7 +1,7 @@
 /**
  * @looseleaf/model: what a library, notebook, page and container are, the
- * rich-text schema, reading and writing them in Yjs docs, export, and import
- * from an import tree. No DOM, network or storage; runs in Node and browsers.
+ * rich-text schema, reading and writing them in Yjs docs, export, mirror
+ * planning, and import from an import tree. No DOM, network or storage; runs in Node and browsers.
  */
 export { newId, LIBRARY_DOC_ID, notebookDocId, pageDocId } from './ids.js';
 export { sortByOrder, orderAt, type Ordered } from './order.js';
@@ -99,5 +99,16 @@ export {
   type ExportFile,
 } from './export/bundle.js';
 export type { PageJson } from './export/json.js';
+export {
+  MIRROR_MANIFEST_FILE,
+  MIRROR_ASSETS_FOLDER,
+  isSafeMirrorPath,
+  mirrorOwnedPaths,
+  parseMirrorManifest,
+  serializeMirrorManifest,
+  type MirrorManifest,
+  type MirrorPage,
+} from './mirror/manifest.js';
+export { planMirror, type MirrorPlanInput, type MirrorPlan, type MirrorAssetWrite } from './mirror/plan.js';
 export { importTree, type DocSink, type ImportSummary } from './import.js';
 export type * from './import-tree.js';

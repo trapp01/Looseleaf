@@ -19,7 +19,8 @@ export function sanitizeName(name: string, fallback: string): string {
 
 /**
  * Hands out names within one folder, adding " (2)", " (3)" … to repeats.
- * Comparison ignores case, since macOS and Windows do.
+ * Comparison ignores case and Unicode composition, since macOS and Windows
+ * treat such names as one file.
  */
 export class NameAllocator {
   private readonly used = new Set<string>();
@@ -27,8 +28,9 @@ export class NameAllocator {
   take(base: string, extension = ''): string {
     for (let n = 1; ; n++) {
       const candidate = n === 1 ? `${base}${extension}` : `${base} (${n})${extension}`;
-      if (!this.used.has(candidate.toLowerCase())) {
-        this.used.add(candidate.toLowerCase());
+      const key = candidate.normalize('NFC').toLowerCase();
+      if (!this.used.has(key)) {
+        this.used.add(key);
         return candidate;
       }
     }

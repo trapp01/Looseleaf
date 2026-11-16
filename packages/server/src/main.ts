@@ -17,6 +17,14 @@ function numberFromEnv(name: string, fallback: number, { min }: { min: number })
   return value;
 }
 
+function switchFromEnv(name: string, fallback: boolean): boolean {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return fallback;
+  if (raw.trim() === 'on') return true;
+  if (raw.trim() === 'off') return false;
+  throw new Error(`${name} must be "on" or "off", got "${raw}"`);
+}
+
 async function main(): Promise<void> {
   const dataDir = resolve(process.env.LOOSELEAF_DATA ?? './data');
   const server = await startServer({
@@ -26,8 +34,10 @@ async function main(): Promise<void> {
     webDir: process.env.LOOSELEAF_WEB_DIR ? resolve(process.env.LOOSELEAF_WEB_DIR) : null,
     maxBlobBytes: numberFromEnv('LOOSELEAF_MAX_BLOB_BYTES', DEFAULT_MAX_BLOB_BYTES, { min: 1 }),
     snapshotKeep: numberFromEnv('LOOSELEAF_SNAPSHOT_KEEP', DEFAULT_SNAPSHOT_KEEP, { min: 1 }),
+    mirror: switchFromEnv('LOOSELEAF_MIRROR', true),
   });
   console.log(`Looseleaf server ${SERVER_VERSION} listening on port ${server.port}, data in ${dataDir}`);
+  console.log(server.mirror === null ? 'The mirror is off (LOOSELEAF_MIRROR=off)' : `Mirroring the notes as Markdown in ${server.mirror.root}`);
   console.log(server.webDir === null ? 'No web client is served' : `Serving the web client from ${server.webDir}`);
   if (server.tokenGenerated) {
     console.log(`Generated an access token and saved it to ${server.tokenSource}:\n\n  ${server.token}\n`);

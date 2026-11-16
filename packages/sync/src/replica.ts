@@ -55,6 +55,8 @@ export interface ReplicaEvents {
   onStoreError(error: Error): void;
   /** The number of unsent or unstored docs changed. */
   onCountsChange(): void;
+  /** A change to the doc, made here or received from the server, has been appended to the store. */
+  onStored(docId: string): void;
 }
 
 export class Replica {
@@ -309,6 +311,7 @@ export class Replica {
     await this.compactIfNeeded(entry.id);
     this.handOn(entry.id, batch);
     this.unloadIfUnused(entry);
+    this.events.onStored(entry.id);
   }
 
   /** Hands the batch's local changes that were not handed on yet to `onLocalChange`, as one update. */
@@ -338,6 +341,7 @@ export class Replica {
   private async appendStored(docId: string, update: Uint8Array): Promise<void> {
     await this.store.appendUpdate(docId, update);
     this.countStored(docId, 1);
+    this.events.onStored(docId);
   }
 
   private countStored(docId: string, added: number): void {

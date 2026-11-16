@@ -1,14 +1,15 @@
-/** Settings: connect to a server, change it, disconnect, and the sync details. */
+/** Settings: connect to a server, change it, disconnect, the sync details, and the desktop app's mirror folder. */
 import { useState } from 'react';
 import { Dialog } from './controls.js';
 import { chooseDeviceOnly } from './connection.js';
 import { ServerForm } from './FirstRun.js';
 import { useServices } from './services.js';
+import { MirrorSettings } from '../mirror/MirrorSettings.js';
 import { SyncDetails } from '../sync-ui/SyncStatusControl.js';
 import { useSyncStatus } from '../sync-ui/use-sync-status.js';
 
 export function Settings({ onClose }: { onClose: () => void }) {
-  const { client } = useServices();
+  const { client, mirror } = useServices();
   const status = useSyncStatus(client);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -63,6 +64,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <h3>Details</h3>
         <SyncDetails status={status} />
       </section>
+      {mirror && <MirrorSettings mirror={mirror} />}
     </Dialog>
   );
 }

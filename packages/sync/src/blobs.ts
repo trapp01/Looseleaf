@@ -37,6 +37,8 @@ export interface ServerAccess {
 export interface BlobSyncEvents {
   /** The unsent count or the mirror state changed. */
   onChange(): void;
+  /** A blob, put here or downloaded, has been written to the store. */
+  onStored(hash: string): void;
   onError(kind: 'bad-token' | 'blob' | 'store', error: Error): void;
 }
 
@@ -281,7 +283,10 @@ export class BlobSync {
 
   /** Writes the bytes to the store, tracked so `flushed` can wait for the write. */
   private storeBlob(bytes: Uint8Array): Promise<string> {
-    const write = this.store.putBlob(bytes);
+    const write = this.store.putBlob(bytes).then((hash) => {
+      this.events.onStored(hash);
+      return hash;
+    });
     const settled = write.then(
       () => undefined,
       () => undefined,

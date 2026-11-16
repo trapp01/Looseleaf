@@ -2,8 +2,9 @@
 
 The Looseleaf desktop app: an Electron shell that hosts the built web client
 (`packages/web`) unchanged. It owns the window, the native menu bar, file and
-folder dialogs, PDF output and read-only access to OneNote backup files. It
-knows nothing about notes. The web client talks to it only through
+folder dialogs, PDF output, read-only access to OneNote backup files, and the
+mirror folder: remembering it and writing a mirror's files into it. It knows
+nothing about notes. The web client talks to it only through
 `window.looseleafShell`, declared in `packages/web/src/shell-bridge.ts`.
 
 ## Layout
@@ -12,11 +13,12 @@ knows nothing about notes. The web client talks to it only through
 | --- | --- |
 | `src/main.ts` | App lifecycle, the window, the `app://` protocol, permissions, navigation guards, IPC registration. |
 | `src/preload.ts` | Sets `window.looseleafShell` in the sandboxed page. |
-| `src/ipc.ts` | What each bridge call does: argument checks, folder grants, the work. No Electron imports. |
+| `src/ipc.ts` | What each bridge call does: argument checks, folder grants, the remembered mirror folder, the work. No Electron imports. |
 | `src/onenote-files.ts` | Finding, listing and reading `.one` / `.onetoc2` files. Read-only. |
 | `src/web-client.ts` | The `app://looseleaf` origin and how a URL path maps to a built file. |
 | `src/menu.ts` | The menu bar template. |
 | `src/window-state.ts` | Remembered window size and position. |
+| `src/mirror-setting.ts` | The remembered mirror folder, in `mirror-folder.json` in user data. |
 | `src/channels.ts` | IPC channel names shared by main and preload. |
 | `scripts/smoke.ts` | Launches the shell against a stub page and checks it from inside. |
 | `build/` | The app icon: `icon.svg` is the source, `icon.png` and `icon.icns` are generated from it. |
@@ -40,7 +42,7 @@ Environment variables, read only when the app is not packaged:
 | --- | --- |
 | `LOOSELEAF_WEB_URL` | Load this URL instead of `app://looseleaf/`. Its origin may call the bridge. |
 | `LOOSELEAF_WEB_DIR` | Serve built files from this folder instead of `../web/dist`. Also read by `package`. |
-| `LOOSELEAF_USER_DATA_DIR` | Keep the profile (IndexedDB, window state) in this folder. |
+| `LOOSELEAF_USER_DATA_DIR` | Keep the profile (IndexedDB, window state, mirror folder setting) in this folder. |
 
 ## Build, test, smoke
 
@@ -55,8 +57,9 @@ pnpm --filter @looseleaf/desktop smoke      # needs a desktop session
 page: the origin is `app://looseleaf`, it is a secure context, IndexedDB
 persists across launches, `looseleafShell.kind` is `desktop`, `fetch` over
 plain http and a `ws://` WebSocket reach a local server (by `localhost` and by a
-name that is not loopback), Node globals are absent, and IPC refuses a folder
-that was never chosen.
+name that is not loopback), Node globals are absent, IPC refuses a folder
+that was never chosen, and applying a mirror batch is refused before a mirror
+folder is chosen.
 
 ## Package
 
@@ -108,6 +111,29 @@ inside OneNote's container.
 - **Windows**: a code-signing certificate (`CSC_LINK` / `CSC_KEY_PASSWORD`) or
   Azure Trusted Signing (`win.azureSignOptions`).
 
+## Mirror folder
+
+Settings → **Mirror folder** (also File → Mirror Folder…) chooses a folder the
+app keeps a mirror in: one Markdown file per page under
+`<Notebook>/<Section group>/<Section>/`, pictures and attached files under
+`assets/`, and the mirror manifest `.looseleaf-mirror.json`, laid out as
+"Mirror" in [docs/architecture.md](../../docs/architecture.md) describes. The
+web client plans the files (`packages/web/src/mirror`) and sends them in
+batches through `applyMirrorBatch`; the shell writes them with
+`@looseleaf/server/mirror-folder` into the remembered folder only.
+
+- A folder is accepted when it is empty, apart from names starting with `.`,
+  or already holds a mirror manifest; any other folder is refused, because a
+  plan overwrites whatever is at its paths.
+- Files are written only while the app is open. Each start checks every page,
+  which writes what changed while the app was closed.
+- **Stop mirroring** forgets the folder; the files already written stay.
+- The folder is remembered in `mirror-folder.json` in the user data folder. A
+  folder that is gone, such as an unplugged drive, makes each write fail with
+  an error naming it, shown in Settings, and the setting is kept.
+- Files the mirror manifest does not list are never removed, and edits made to
+  the mirror's files are not read back.
+
 ## Security model
 
 - The page runs sandboxed with context isolation and no Node integration;
@@ -118,6 +144,10 @@ inside OneNote's container.
   can write. Listing and reading work only inside a folder that the folder
   picker or the backup lookup returned in this session; paths with `..`,
   absolute paths and paths through symbolic links are refused.
+- Mirror files are written only inside the remembered mirror folder, which
+  the page cannot name: paths that leave it through `..`, an absolute path or
+  a symbolic link are refused, and a file is removed only when the mirror
+  manifest on disk lists it.
 - `app://looseleaf` is a secure context but, like other custom schemes in
   Chromium, does not block mixed content, so the web client can reach a
   plain-http server on a tailnet with `fetch` and `ws://`. CORS still applies.

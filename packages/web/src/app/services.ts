@@ -24,6 +24,7 @@ import { pickFiles } from '../canvas/files.js';
 import { placeFiles } from '../canvas/insert.js';
 import type { PageSession } from '../canvas/page-session.js';
 import { deliverExport } from '../exporting/export-run.js';
+import { startMirror, type MirrorRunner } from '../mirror/mirror-runner.js';
 import { NotebookDocs } from '../nav/notebook-docs.js';
 import { RecentPages } from '../nav/recent.js';
 import { SearchIndex, type SearchablePage } from '../search/search-index.js';
@@ -44,6 +45,8 @@ export interface Services {
   search: SearchIndex;
   recent: RecentPages;
   commands: CommandTable;
+  /** The mirror kept in the folder chosen in the desktop app; null outside it. */
+  mirror: MirrorRunner | null;
 }
 
 export const ServicesContext = createContext<Services | null>(null);
@@ -81,6 +84,7 @@ export async function createServices(client: SyncClient): Promise<Services> {
     }),
     recent: new RecentPages(),
     commands: null as unknown as CommandTable,
+    mirror: startMirror(client),
   };
   services.commands = new CommandTable(() => ({ editor: liveEditor(services), app: appActions(services) }), isMac);
   retryMissingOnSync(client, services.blobs);

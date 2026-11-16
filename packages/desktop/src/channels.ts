@@ -9,6 +9,11 @@ export const CHANNELS = {
   pickFolder: 'looseleaf:pick-folder',
   listOneNoteFiles: 'looseleaf:list-onenote-files',
   readOneNoteFile: 'looseleaf:read-onenote-file',
+  chooseMirrorFolder: 'looseleaf:choose-mirror-folder',
+  mirrorFolder: 'looseleaf:mirror-folder',
+  stopMirroring: 'looseleaf:stop-mirroring',
+  readMirrorManifest: 'looseleaf:read-mirror-manifest',
+  applyMirrorBatch: 'looseleaf:apply-mirror-batch',
   menuCommand: 'looseleaf:menu-command',
 } as const;
 

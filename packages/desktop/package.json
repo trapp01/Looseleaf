@@ -16,6 +16,8 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
+    "@looseleaf/model": "workspace:*",
+    "@looseleaf/server": "workspace:*",
     "@types/ws": "^8.18.2",
     "electron": "^45.3.2",
     "esbuild": "^0.28.2",

@@ -132,6 +132,24 @@ describe('SyncClient with no server', () => {
     await client.close();
   });
 
+  it('reports each doc change and blob it stores to onDocStored and onBlobStored', async () => {
+    const client = await offlineClient();
+    const docs: string[] = [];
+    const blobs: string[] = [];
+    client.onDocStored((docId) => docs.push(docId));
+    const stop = client.onBlobStored((hash) => blobs.push(hash));
+    const doc = await client.openDoc('pg:a');
+    doc.getText('t').insert(0, 'stored');
+    await client.flush();
+    expect(docs).toEqual(['pg:a']);
+    const hash = await client.putBlob(new Uint8Array([1, 2, 3]));
+    expect(blobs).toEqual([hash]);
+    stop();
+    await client.putBlob(new Uint8Array([4]));
+    expect(blobs).toEqual([hash]);
+    await client.close();
+  });
+
   it('rejects an address that is not http(s) and a blank token', async () => {
     const client = await offlineClient();
     await expect(client.connect({ url: 'nas', token: 't' })).rejects.toThrow(/http/);

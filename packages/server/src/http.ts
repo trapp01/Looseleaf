@@ -1,6 +1,7 @@
 /**
  * The server's HTTP routes: info and health (no auth), blob list, download
- * and upload (bearer token), and the web client's static files for every
+ * and upload (bearer token), the MCP endpoint at /mcp (bearer token; the
+ * protocol is in `mcp.ts`), and the web client's static files for every
  * other path. Every response allows any origin; the token is the gate.
  * Every response also forbids MIME sniffing.
  */
@@ -21,6 +22,8 @@ import {
 import { bearerToken, tokenMatches } from './access-token.js';
 import { BlobHashMismatchError, BlobTooLargeError, type DiskStore } from './disk-store.js';
 import { isNotFound } from './doc-log.js';
+import { answerMcp, MCP_PATH } from './mcp.js';
+import type { MirrorView } from './mirror.js';
 
 export interface HttpOptions {
   store: DiskStore;
@@ -29,6 +32,10 @@ export interface HttpOptions {
   maxBlobBytes: number;
   /** A folder holding the built web client with an index.html, or null to serve a plain-text notice. */
   webDir: string | null;
+  /** The running mirror the MCP endpoint reads, or null when the mirror is off and /mcp answers 404. */
+  mirror: MirrorView | null;
+  /** Called with a blob's hash after an upload stores a blob that was not stored before. It must not throw or block. */
+  onBlobStored?: (hash: string) => void;
 }
 
 const NO_WEB_CLIENT =
@@ -88,8 +95,8 @@ async function handle(options: HttpOptions, req: IncomingMessage, res: ServerRes
   const method = req.method ?? 'GET';
   if (method === 'OPTIONS') {
     res.writeHead(204, {
-      'Access-Control-Allow-Methods': 'GET, HEAD, PUT, OPTIONS',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      'Access-Control-Allow-Methods': 'GET, HEAD, PUT, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type, Accept, Mcp-Protocol-Version, Mcp-Session-Id',
       'Access-Control-Max-Age': '86400',
     });
     res.end();
@@ -101,6 +108,7 @@ async function handle(options: HttpOptions, req: IncomingMessage, res: ServerRes
   }
   if (path === HEALTH_PATH && method === 'GET') return sendJson(res, 200, { ok: true });
   if (path === BLOBS_PATH || path.startsWith(`${BLOBS_PATH}/`)) return handleBlobs(options, req, res, path, method);
+  if (path === MCP_PATH) return handleMcp(options, req, res, method);
   if (path.startsWith('/api/')) return sendJson(res, 404, { error: `no route ${method} ${path}` });
   if (method !== 'GET' && method !== 'HEAD') return sendJson(res, 405, { error: `${method} is not allowed here` });
   return serveWebClient(options.webDir, req, res, path);
@@ -145,6 +153,29 @@ async function handleBlobs(
   return sendJson(res, 405, { error: `${method} is not allowed on a blob` });
 }
 
+async function handleMcp(options: HttpOptions, req: IncomingMessage, res: ServerResponse, method: string): Promise<void> {
+  if (options.mirror === null) {
+    return sendJson(res, 404, { error: 'the MCP endpoint needs the mirror, which is off; set LOOSELEAF_MIRROR=on (or leave it unset) and restart' });
+  }
+  if (method !== 'POST') {
+    // No SSE stream and no sessions, so GET and DELETE have nothing to do.
+    res.setHeader('Allow', 'POST');
+    return sendJson(res, 405, { error: `${method} is not allowed on ${MCP_PATH}; send JSON-RPC messages with POST` });
+  }
+  const token = bearerToken(req.headers.authorization);
+  if (token === null || !tokenMatches(token, options.token)) {
+    return sendJson(res, 401, { error: 'missing or wrong access token' });
+  }
+  const reply = await answerMcp(req, options.mirror, options.version);
+  for (const [name, value] of Object.entries(reply.headers ?? {})) res.setHeader(name, value);
+  if (reply.body === null) {
+    res.writeHead(reply.status);
+    res.end();
+    return;
+  }
+  return sendJson(res, reply.status, reply.body);
+}
+
 async function receiveBlob(options: HttpOptions, req: IncomingMessage, res: ServerResponse, hash: string): Promise<void> {
   const declared = Number(req.headers['content-length'] ?? NaN);
   if (declared > options.maxBlobBytes) {
@@ -154,6 +185,13 @@ async function receiveBlob(options: HttpOptions, req: IncomingMessage, res: Serv
   }
   try {
     const created = await options.store.putBlobStream(hash, req, options.maxBlobBytes);
+    if (created) {
+      try {
+        options.onBlobStored?.(hash);
+      } catch (error) {
+        console.error(`A listener for stored blobs failed on blob ${hash}; the blob is stored`, error);
+      }
+    }
     return sendJson(res, created ? 201 : 200, { blob: hash });
   } catch (error) {
     if (error instanceof BlobHashMismatchError) return sendJson(res, 400, { error: error.message });

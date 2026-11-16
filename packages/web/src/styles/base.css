@@ -643,6 +643,10 @@ code {
   margin: 0;
 }
 
+.settings-section .mirror-folder-path {
+  overflow-wrap: anywhere;
+}
+
 /* Popovers and menus */
 .popover,
 .context-menu {

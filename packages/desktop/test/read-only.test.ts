@@ -49,7 +49,14 @@ describe('OneNote handlers are read-only', () => {
   it('list and read without calling any write API, opening files with "r" only', async () => {
     const { folder } = oneNoteFixture();
     const writeFile = vi.fn(async () => undefined);
-    const handlers = createHandlers({ platform: 'darwin', homeDir: '/nowhere', env: {}, saveFolder: '/nowhere', writeFile });
+    const handlers = createHandlers({
+      platform: 'darwin',
+      homeDir: '/nowhere',
+      env: {},
+      saveFolder: '/nowhere',
+      writeFile,
+      mirrorSettingFile: '/nowhere/mirror-folder.json',
+    });
     const host: ShellHost = {
       showSaveDialog: vi.fn(async () => '/nowhere/out'),
       showFolderDialog: async () => folder,

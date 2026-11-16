@@ -2,8 +2,9 @@
 
 The self-hosted hub that every Looseleaf replica syncs through. It stores
 docs and blobs on disk, runs the `/sync` WebSocket endpoint, takes a daily
-snapshot of its data folder, and serves the built web client. HTTP and the
-WebSocket share one port.
+snapshot of its data folder, keeps a Markdown mirror of the notes, answers
+AI assistants at an MCP endpoint, and serves the built web client. HTTP and
+the WebSocket share one port.
 
 ## Running
 
@@ -26,6 +27,7 @@ The bundle needs only Node 22; copy `dist/server.js` anywhere and run it.
 | `LOOSELEAF_WEB_DIR` | unset | Folder of the built web client (`packages/web/dist`). Ignored unless it holds an `index.html`; without one the server answers every non-API path with a one-line notice. |
 | `LOOSELEAF_MAX_BLOB_BYTES` | `209715200` (200 MB) | Largest blob upload accepted. |
 | `LOOSELEAF_SNAPSHOT_KEEP` | `14` | Daily snapshots to keep. |
+| `LOOSELEAF_MIRROR` | `on` | `off` stops the server writing `data/mirror/` (see Mirror). Any value other than `on` or `off` stops the server at start. |
 
 The token keeps other devices on a private network (such as a tailnet) out.
 It is not a substitute for TLS on a public network; put the server behind
@@ -40,6 +42,7 @@ It is not a substitute for TLS on a public network; put the server behind
 | `GET /api/blobs` | bearer | `{ "blobs": ["<sha256>", …] }` |
 | `GET /api/blobs/<sha256>` | bearer | The bytes, or 404. |
 | `PUT /api/blobs/<sha256>` | bearer | 201 stored, 200 already stored, 400 when the bytes do not hash to the name, 413 past the size limit. |
+| `POST /mcp` | bearer | The MCP endpoint (see MCP endpoint). 404 with the mirror off; `GET` and `DELETE` answer 405. |
 | `GET /sync` | token in the hello | The WebSocket sync endpoint; see "Wire protocol" in `docs/architecture.md`. A bad token closes with 4401. |
 | anything else | none | The web client's files, `index.html` for unknown paths. |
 
@@ -56,6 +59,7 @@ data/
   docs/<docId>/*.corrupt-<time>  damaged bytes set aside on read; safe to delete
   blobs/<aa>/<sha256>     blob bytes; aa is the hash's first two hex digits
   snapshots/<yyyy-mm-dd>/ daily copies of docs/ and blobs/ (blobs hard-linked)
+  mirror/                 every page as a Markdown file (see Mirror)
   tmp/                    partial writes; emptied at startup
 ```
 
@@ -80,6 +84,63 @@ memory (`DOC_CACHE_SIZE`); the least recently used idle ones are dropped.
 
 Plain files mean the folder can be backed up with rsync, restic or a ZFS
 snapshot while the server runs.
+
+## Mirror
+
+The server keeps `data/mirror/`: every live page as a Markdown file, readable
+by any editor or search tool while Looseleaf is not running.
+
+```
+mirror/
+  .looseleaf-mirror.json                     the mirror manifest: every page and file the mirror owns
+  assets/<sha256>.<ext>                      pictures and attached files, shared by every page
+  <Notebook>/<Section group>/<Section>/<Page>.md
+```
+
+Names follow the Markdown export. Each page file starts with YAML front matter
+(`id`, `notebook`, `section`) followed by the page as the Markdown export
+writes it. A picture whose blob the server does not hold yet is written as
+`[Missing picture: …]` and replaced once the blob is uploaded.
+
+The mirror is read-only: the server overwrites a page's file when the page
+changes, about 5 seconds after the last edit to it, and nothing in the folder
+is read back into the notes. The server removes only files the manifest lists
+and folders that are left empty, so other files placed in `mirror/` stay.
+Deleting `mirror/` is safe; the server writes it again at its next start,
+which also checks every page against the manifest. Snapshots do not copy
+`mirror/`. A mirror that cannot be written is logged and tried again at the
+next change; syncing carries on. `LOOSELEAF_MIRROR=off` turns it off; the
+folder is then neither written nor removed.
+
+## MCP endpoint
+
+`POST /mcp` speaks the [Model Context Protocol](https://modelcontextprotocol.io)
+over streamable HTTP, so an AI assistant can search and read the notes. It is
+stateless and answers every request with plain JSON: no sessions and no event
+stream. It takes the same bearer token as the blob routes and reads the
+mirror and nothing else, so it needs the mirror on; with `LOOSELEAF_MIRROR=off`
+it answers 404. Every tool is read-only.
+
+| Tool | Arguments | Returns |
+| --- | --- | --- |
+| `list_notebooks` | none | Every notebook with its id and its sections, each with its id and page count. A section inside groups is shown as `Group / Section`. Notebooks and sections with no pages are not listed. |
+| `list_pages` | `section_id` | The section's pages in order, with ids, titles and subpage levels. |
+| `search_notes` | `query`, `notebook_id` (optional), `limit` (optional, default 20, at most 100) | Pages whose title or text holds every word of the query, ignoring case: pages with every word in the title first, then by number of occurrences. Each result has the page id, title, notebook, section and up to 3 matching lines. |
+| `read_page` | `page_id` | The page's mirror file: front matter, then the page as Markdown. Pictures and attached files stay as links to `mirror/assets/`. |
+
+Results are text written for a model to read, and always carry the ids the
+next call needs. Search reads the mirror's files on each call. While the
+server's start-up check of the mirror is still running, the tools answer that
+the mirror is being built.
+
+To connect Claude Code:
+
+```sh
+claude mcp add --transport http looseleaf http://<your-server>:8421/mcp --header "Authorization: Bearer <token>"
+```
+
+An assistant that connects from its vendor's cloud rather than from your own
+machine cannot reach a server on a private network.
 
 ## Snapshots and restore
 

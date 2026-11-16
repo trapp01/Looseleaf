@@ -58,6 +58,34 @@ describe('two replicas editing apart', () => {
     expect(contentOf(liveB)).toEqual(page);
   });
 
+  it('converges with both edits while listeners for stored docs run, one of which throws', async () => {
+    const server = await TestServer.start();
+    const a = await makeClient();
+    const b = await makeClient();
+    const heardByA: string[] = [];
+    const heardByB: string[] = [];
+    a.client.onDocStored(() => {
+      throw new Error('a listener that fails');
+    });
+    a.client.onDocStored((docId) => heardByA.push(docId));
+    b.client.onDocStored((docId) => heardByB.push(docId));
+    await editDoc(a.client, 'pg:shared', (doc) => doc.getText('t').insert(0, 'alpha '));
+    await editDoc(b.client, 'pg:shared', (doc) => doc.getText('t').insert(0, 'beta '));
+    await editDoc(a.client, 'pg:onlyA', (doc) => doc.getText('t').insert(0, 'made on A'));
+    heardByB.length = 0;
+    for (const { client } of [a, b]) await client.connect({ url: server.url, token: TOKEN });
+    await Promise.all([a, b].map(({ client }) => waitForSynced(client)));
+
+    const states = await waitForConvergence(server, [a.store, b.store], ['pg:shared', 'pg:onlyA']);
+    const text = contentOf(states.get('pg:shared')!).t;
+    expect(text).toContain('alpha ');
+    expect(text).toContain('beta ');
+    // B is told about the doc it never opened and about the edit A made to the shared one.
+    expect(heardByB).toContain('pg:onlyA');
+    expect(heardByB).toContain('pg:shared');
+    expect(heardByA).toContain('pg:shared');
+  });
+
   it('forwards live edits between connected replicas', async () => {
     const server = await TestServer.start();
     const a = await connectedClient(server);

@@ -47,6 +47,7 @@ export function menuTemplate(
       { type: 'separator' },
       command('Import from OneNote…', 'import-onenote'),
       command('Export…', 'export'),
+      command('Mirror Folder…', 'settings'),
       { type: 'separator' },
       command('Save as PDF…', 'save-pdf'),
       command('Print…', 'print', 'CmdOrCtrl+P'),

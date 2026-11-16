@@ -14,13 +14,16 @@ import type { JSONContent } from '../rich-text.js';
 import { pageToHtml } from './html.js';
 import { pageToJson } from './json.js';
 import { pageToMarkdown } from './markdown.js';
-import { NameAllocator, sanitizeName } from './names.js';
+import { layoutChildren, notebookFolderName, pageFileName } from './layout.js';
+import { NameAllocator } from './names.js';
 import { pageToText } from './text.js';
 
 /** Where exports read from. `getBlob` resolves null (or rejects) for a blob this device lacks. */
 export interface DocSource {
   getDoc(docId: string): Promise<Y.Doc>;
   getBlob(hash: string): Promise<Uint8Array | null>;
+  /** Whether the device holds the blob, without reading it. The mirror planner uses it when present. */
+  hasBlob?(hash: string): Promise<boolean>;
 }
 
 export type ExportFormat = 'html' | 'markdown' | 'text' | 'json';
@@ -64,7 +67,7 @@ export async function exportPage(
   if (node?.kind !== 'page') throw new Error(`Notebook ${notebookId} has no page ${pageId}`);
   const entry = { id: node.id, title: node.name, level: node.level, createdAt: node.createdAt, modifiedAt: node.modifiedAt };
   const exporter = new Exporter(source, format);
-  await exporter.addPage(entry, [], new NameAllocator());
+  await exporter.addPage(entry, [], pageFileName(entry.title, new NameAllocator(), EXTENSIONS[format]));
   return exporter.files();
 }
 
@@ -124,31 +127,24 @@ class Exporter {
   }
 
   async addNotebook(notebookId: string, name: string, names: NameAllocator): Promise<void> {
-    const folder = names.take(sanitizeName(name, 'Untitled notebook'));
+    const folder = notebookFolderName(name, names);
     this.output.set(`${folder}/`, new Uint8Array(0));
     const tree = readTree(await this.source.getDoc(notebookDocId(notebookId)));
     await this.addChildren(tree.children, [folder], new NameAllocator());
   }
 
   async addChildren(children: TreeChild[], folder: string[], names: NameAllocator): Promise<void> {
-    for (const child of children) {
-      const path = [...folder, names.take(sanitizeName(child.name, `Untitled ${child.kind === 'group' ? 'section group' : 'section'}`))];
-      this.output.set(`${path.join('/')}/`, new Uint8Array(0));
-      if (child.kind === 'group') {
-        await this.addChildren(child.children, path, new NameAllocator());
-      } else {
-        const pageNames = new NameAllocator();
-        for (const page of child.pages) await this.addPage(page, path, pageNames);
-      }
+    for (const item of layoutChildren(children, folder, names, EXTENSIONS[this.format])) {
+      if (item.kind === 'folder') this.output.set(`${item.path.join('/')}/`, new Uint8Array(0));
+      else await this.addPage(item.page, item.folder, item.fileName);
     }
   }
 
-  async addPage(entry: PageEntry, folder: string[], names: NameAllocator): Promise<void> {
+  async addPage(entry: PageEntry, folder: string[], fileName: string): Promise<void> {
     const snapshot = readPage(await this.source.getDoc(pageDocId(entry.id)));
     const blobs = new Map<string, Uint8Array | null>();
     for (const hash of blobHashes(snapshot)) blobs.set(hash, await this.blob(hash));
     const page: PageForExport = { ...entry, snapshot, blobs };
-    const fileName = names.take(sanitizeName(entry.title, 'Untitled page'), EXTENSIONS[this.format]);
     const path = [...folder, fileName].join('/');
     const toRoot = '../'.repeat(folder.length);
     switch (this.format) {
@@ -182,7 +178,7 @@ class Exporter {
 }
 
 /** Every blob a page references: image and file containers and pictures inside text bodies. */
-function blobHashes(snapshot: PageSnapshot): Set<string> {
+export function blobHashes(snapshot: PageSnapshot): Set<string> {
   const hashes = new Set<string>();
   const walk = (node: JSONContent) => {
     if (node.type === 'image' && typeof node.attrs?.blob === 'string') hashes.add(node.attrs.blob);

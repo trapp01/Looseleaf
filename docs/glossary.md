@@ -20,5 +20,7 @@ One name per thing. Folders, types, config keys and UI copy use these words.
 | **Replica store** | Where a replica keeps its docs and blobs on the device. | `packages/sync` |
 | **Server** | The self-hosted hub that replicas sync through. It is also a replica store, on disk. | `packages/server` |
 | **Snapshot** | A dated copy of the server's docs and blobs, kept for point-in-time restore. | `packages/server` |
+| **Mirror** | A folder of Markdown files, one per page, that follows a replica so the notes can be read without Looseleaf. Read-only: the docs stay the source of truth. | `packages/model/src/mirror` |
+| **Mirror manifest** | The file at a mirror's root that lists every page in it, in notebook order, and every file the mirror owns. | `packages/model/src/mirror` |
 | **Import tree** | The neutral, plain-object form of a notebook that every importer produces. | `packages/model` |
 | **Deleted notes** | The recycle bin. Deleting a section or page marks it deleted; it stays restorable. | `packages/model` |

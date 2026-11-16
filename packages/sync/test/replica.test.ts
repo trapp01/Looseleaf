@@ -5,15 +5,18 @@ import { Replica, type ReplicaEvents } from '../src/replica.js';
 import { MemoryStore } from '../src/replica-store.js';
 import { captureUpdates } from './replica-store-suite.js';
 
-function recordingEvents(): ReplicaEvents & { sent: Uint8Array[]; errors: string[] } {
+function recordingEvents(): ReplicaEvents & { sent: Uint8Array[]; errors: string[]; stored: string[] } {
   const sent: Uint8Array[] = [];
   const errors: string[] = [];
+  const stored: string[] = [];
   return {
     sent,
     errors,
+    stored,
     onLocalChange: (_docId, update) => sent.push(update),
     onStoreError: (error) => errors.push(error.message),
     onCountsChange: () => undefined,
+    onStored: (docId) => stored.push(docId),
   };
 }
 
@@ -80,6 +83,39 @@ describe('Replica', () => {
     replica.release('pg:f');
     await expect(replica.close()).rejects.toThrow(/pg:f/);
     expect(doc.getText('t').toString()).toBe('unstored');
+  });
+});
+
+describe('Replica onStored', () => {
+  it('reports local changes and remote updates to loaded and unloaded docs once they are stored', async () => {
+    const store = new MemoryStore();
+    const events = recordingEvents();
+    const replica = await Replica.create(store, events);
+    const doc = await replica.open('pg:open');
+    doc.getText('t').insert(0, 'typed here');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(events.stored).toEqual(['pg:open']);
+
+    const remote = new Y.Doc();
+    remote.getText('t').insert(0, 'from the server');
+    await replica.applyRemote('pg:open', Y.encodeStateAsUpdate(remote));
+    await replica.applyRemote('pg:closed', Y.encodeStateAsUpdate(remote));
+    expect(events.stored).toEqual(['pg:open', 'pg:open', 'pg:closed']);
+    expect(await store.readUpdates('pg:closed')).toHaveLength(1);
+  });
+
+  it('does not report a change the store refuses until a retry stores it', async () => {
+    const store = new RefusingStore();
+    const events = recordingEvents();
+    const replica = await Replica.create(store, events);
+    const doc = await replica.open('pg:f');
+    store.refuse = true;
+    doc.getText('t').insert(0, 'unstored');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(events.stored).toEqual([]);
+    store.refuse = false;
+    await replica.flush();
+    expect(events.stored).toEqual(['pg:f']);
   });
 });
 

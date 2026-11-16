@@ -115,6 +115,7 @@ function registerIpc(): void {
     env: process.env,
     saveFolder: app.getPath('downloads'),
     writeFile: (path, bytes) => writeFile(path, bytes),
+    mirrorSettingFile: join(app.getPath('userData'), 'mirror-folder.json'),
   });
   for (const [channel, handler] of Object.entries(handlers)) {
     ipcMain.handle(channel, (event, ...args: unknown[]) => {

@@ -88,4 +88,15 @@ describe('menu layout', () => {
     expect(sent.get('Actual Size')).toEqual(['zoom-reset']);
     expect(sent.get('Undo')).toEqual(['undo']);
   });
+
+  it('opens Settings from Mirror Folder… beside Import and Export', () => {
+    const file = menuTemplate('darwin', () => undefined).find((m) => m.label === 'File');
+    const labels = (Array.isArray(file?.submenu) ? file.submenu : []).map((i) => i.label);
+    expect(labels.slice(labels.indexOf('Import from OneNote…'), labels.indexOf('Import from OneNote…') + 3)).toEqual([
+      'Import from OneNote…',
+      'Export…',
+      'Mirror Folder…',
+    ]);
+    expect(clickAll('darwin').get('Mirror Folder…')).toEqual(['settings']);
+  });
 });
