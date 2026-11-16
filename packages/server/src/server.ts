@@ -14,6 +14,7 @@ import { DiskStore } from './disk-store.js';
 import { createHttpHandler } from './http.js';
 import { Hub } from './hub.js';
 import { Mirror, type MirrorView } from './mirror.js';
+import { NotesWriter } from './notes-writer.js';
 import { DEFAULT_SNAPSHOT_KEEP, startSnapshots } from './snapshots.js';
 import packageJson from '../package.json' with { type: 'json' };
 
@@ -77,6 +78,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
       maxBlobBytes: options.maxBlobBytes ?? DEFAULT_MAX_BLOB_BYTES,
       webDir,
       mirror,
+      writer: new NotesWriter(hub),
       onBlobStored: mirror === null ? undefined : (hash) => mirror.blobStored(hash),
     }),
   );

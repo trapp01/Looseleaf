@@ -24,6 +24,7 @@ import { BlobHashMismatchError, BlobTooLargeError, type DiskStore } from './disk
 import { isNotFound } from './doc-log.js';
 import { answerMcp, MCP_PATH } from './mcp.js';
 import type { MirrorView } from './mirror.js';
+import type { NotesWriter } from './notes-writer.js';
 
 export interface HttpOptions {
   store: DiskStore;
@@ -34,6 +35,8 @@ export interface HttpOptions {
   webDir: string | null;
   /** The running mirror the MCP endpoint reads, or null when the mirror is off and /mcp answers 404. */
   mirror: MirrorView | null;
+  /** What the MCP endpoint's write tools change the docs through. */
+  writer: NotesWriter;
   /** Called with a blob's hash after an upload stores a blob that was not stored before. It must not throw or block. */
   onBlobStored?: (hash: string) => void;
 }
@@ -166,7 +169,7 @@ async function handleMcp(options: HttpOptions, req: IncomingMessage, res: Server
   if (token === null || !tokenMatches(token, options.token)) {
     return sendJson(res, 401, { error: 'missing or wrong access token' });
   }
-  const reply = await answerMcp(req, options.mirror, options.version);
+  const reply = await answerMcp(req, { mirror: options.mirror, writer: options.writer }, options.version);
   for (const [name, value] of Object.entries(reply.headers ?? {})) res.setHeader(name, value);
   if (reply.body === null) {
     res.writeHead(reply.status);

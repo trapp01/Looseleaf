@@ -146,7 +146,11 @@ function toColor(hex: string | undefined): ColorName | undefined {
 
 type PutBlob = (bytes: Uint8Array, mime: string) => Promise<string>;
 
-async function blocksToJson(blocks: ImportedBlock[], putBlob: PutBlob, warn: (text: string) => void): Promise<JSONContent[]> {
+/**
+ * Import-tree blocks as rich-text block nodes. Pictures are stored through
+ * `putBlob`; anything left out or changed is reported through `warn`.
+ */
+export async function blocksToJson(blocks: ImportedBlock[], putBlob: PutBlob, warn: (text: string) => void): Promise<JSONContent[]> {
   const out: JSONContent[] = [];
   for (const block of blocks) {
     switch (block.type) {

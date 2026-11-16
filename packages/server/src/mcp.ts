@@ -3,12 +3,11 @@
  * plain JSON: reads one JSON-RPC message from a `POST /mcp` body and works
  * out the reply for `initialize`, `ping`, `tools/list` and `tools/call`.
  * There are no sessions and no SSE streams. The token check, the mirror-off
- * answer and writing the reply live in `http.ts`; what the tools do lives in
- * `mcp-tools.ts`. Nothing here imports the MCP SDK.
+ * answer and writing the reply live in `http.ts`; what the tools read and
+ * write lives in `mcp-tools.ts`. Nothing here imports the MCP SDK.
  */
 import type { IncomingMessage } from 'node:http';
-import { callMcpTool, MCP_TOOLS, UnknownToolError } from './mcp-tools.js';
-import type { MirrorView } from './mirror.js';
+import { callMcpTool, MCP_TOOLS, UnknownToolError, type McpNotes } from './mcp-tools.js';
 
 export const MCP_PATH = '/mcp';
 /** Newest first. `initialize` answers the client's version when it is listed here, otherwise the first. */
@@ -17,9 +16,11 @@ export const MCP_PROTOCOL_VERSIONS: readonly string[] = ['2025-11-25', '2025-06-
 export const MCP_MAX_BODY_BYTES = 64 * 1024;
 
 const INSTRUCTIONS =
-  "These tools read the user's own notes from their Looseleaf server, as Markdown. They are read-only. " +
+  "These tools read and add to the user's own notes on their Looseleaf server, as Markdown. " +
   'list_notebooks gives notebook and section ids, list_pages gives the page ids in a section, search_notes finds ' +
-  'pages by words in their title or text, and read_page returns one page by its id.';
+  'pages by words in their title or text, and read_page returns one page by its id. create_page adds a page at the ' +
+  'end of a section and append_to_page adds text to the end of a page; neither changes or removes anything already ' +
+  'in the notes. A write shows in the read tools a few seconds after it is made.';
 
 const PARSE_ERROR = -32700;
 const INVALID_REQUEST = -32600;
@@ -42,7 +43,7 @@ type RequestId = string | number;
  * batch or a malformed message (400), and an `Mcp-Protocol-Version` header
  * this server does not speak (400). Notifications and client responses get 202.
  */
-export async function answerMcp(req: IncomingMessage, mirror: MirrorView, serverVersion: string): Promise<McpReply> {
+export async function answerMcp(req: IncomingMessage, notes: McpNotes, serverVersion: string): Promise<McpReply> {
   const declared = Number(req.headers['content-length'] ?? NaN);
   if (declared > MCP_MAX_BODY_BYTES) return tooLarge();
   const body = await readBody(req);
@@ -71,10 +72,10 @@ export async function answerMcp(req: IncomingMessage, mirror: MirrorView, server
   if (typeof id !== 'string' && typeof id !== 'number') {
     return errorReply(400, null, INVALID_REQUEST, 'Invalid request: "id" must be a string or a number');
   }
-  return answerRequest(id, message.method, message.params, mirror, serverVersion);
+  return answerRequest(id, message.method, message.params, notes, serverVersion);
 }
 
-async function answerRequest(id: RequestId, method: string, params: unknown, mirror: MirrorView, serverVersion: string): Promise<McpReply> {
+async function answerRequest(id: RequestId, method: string, params: unknown, notes: McpNotes, serverVersion: string): Promise<McpReply> {
   switch (method) {
     case 'initialize': {
       const asked = isRecord(params) ? params.protocolVersion : undefined;
@@ -94,7 +95,7 @@ async function answerRequest(id: RequestId, method: string, params: unknown, mir
       const name = isRecord(params) ? params.name : undefined;
       if (typeof name !== 'string') return errorReply(200, id, INVALID_PARAMS, 'tools/call needs params.name, the tool to call');
       try {
-        return result(id, await callMcpTool(mirror, name, (params as Record<string, unknown>).arguments));
+        return result(id, await callMcpTool(notes, name, (params as Record<string, unknown>).arguments));
       } catch (error) {
         if (error instanceof UnknownToolError) return errorReply(200, id, INVALID_PARAMS, error.message);
         console.error(`MCP tool ${name} failed`, error);

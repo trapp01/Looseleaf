@@ -307,6 +307,26 @@ export function writeBody(fragment: Y.XmlFragment, json: JSONContent): void {
 }
 
 /**
+ * Adds a ProseMirror JSON document's blocks after the fragment's existing
+ * content. Nothing already in the fragment changes, so an edit made
+ * concurrently elsewhere in the body merges. Throws when the JSON does not fit
+ * the schema.
+ */
+export function appendBody(fragment: Y.XmlFragment, json: JSONContent): void {
+  if (!fragment.doc) throw new Error('appendBody needs a fragment that is already part of a Y.Doc');
+  // The blocks are built in a scratch doc by the same path as writeBody, then copied in.
+  const scratch = new Y.Doc();
+  try {
+    const built = scratch.getXmlFragment('body');
+    writeBody(built, json);
+    const blocks = built.toArray().map((node) => node.clone()) as Array<Y.XmlElement | Y.XmlText>;
+    fragment.doc.transact(() => fragment.insert(fragment.length, blocks));
+  } finally {
+    scratch.destroy();
+  }
+}
+
+/**
  * The fragment's content as ProseMirror JSON with every attribute filled in.
  * Never changes the doc. Content that no longer fits the schema (from a newer
  * client) comes back as stored rather than failing.

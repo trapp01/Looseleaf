@@ -2,11 +2,12 @@
  * The sync endpoint: the server side of the handshake in "Wire protocol".
  * It answers each client state vector with a Diff and its own state vector,
  * and for every Diff or Update stores what the doc did not already have
- * before relaying exactly that to the other connected clients. Docs are held
- * in memory while in use and evicted, least recently used first. A doc that
- * cannot be read, stored or applied is logged and skipped for that frame; the
- * connection and every other doc carry on, and the client's next handshake
- * offers the doc again.
+ * before relaying exactly that to the other connected clients. Server code
+ * changes a doc through `withDoc`, which stores and relays the same way. Docs
+ * are held in memory while in use and evicted, least recently used first. A
+ * doc that cannot be read, stored or applied is logged and skipped for that
+ * frame; the connection and every other doc carry on, and the client's next
+ * handshake offers the doc again.
  */
 import type { WebSocket } from 'ws';
 import * as Y from 'yjs';
@@ -112,6 +113,44 @@ export class Hub {
     });
   }
 
+  /**
+   * Runs `change` on the doc inside one transaction, in the doc's queue, then
+   * stores what it changed and relays that to every connected client, as an
+   * update from a client would be. A change that writes nothing stores and
+   * sends nothing, so a read-only callback is fine. Resolves with what
+   * `change` returned. Throws, leaving disk and memory as they were, when
+   * `change` throws or the store refuses the update, and when the hub is closing.
+   */
+  async withDoc<T>(docId: string, change: (doc: Y.Doc) => T): Promise<T> {
+    if (this.closing) throw new Error(`The server is shutting down; doc "${docId}" was not changed`);
+    try {
+      return await this.queue.run(docId, async () => {
+        const cached = await this.loadDoc(docId);
+        const changes: Uint8Array[] = [];
+        const collect = (update: Uint8Array) => changes.push(update);
+        cached.doc.on('update', collect);
+        let result: T;
+        try {
+          result = cached.doc.transact(() => change(cached.doc));
+          if (changes.length > 0) {
+            const update = changes.length === 1 ? changes[0]! : Y.mergeUpdates(changes);
+            await this.storeChange(docId, cached, update);
+            this.relay(null, docId, update);
+          }
+        } catch (error) {
+          this.dropDoc(docId);
+          throw error;
+        } finally {
+          cached.doc.off('update', collect);
+        }
+        await this.compactWhenLong(docId, cached);
+        return result;
+      });
+    } finally {
+      this.evictIdleDocs();
+    }
+  }
+
   /** Closes every socket, then waits for every update already received to be stored. */
   async close(): Promise<void> {
     this.closing = true;
@@ -215,13 +254,16 @@ export class Hub {
     } finally {
       cached.doc.off('update', collect);
     }
-    if (cached.storedCount > LOG_COMPACT_AFTER_RECORDS) {
-      try {
-        await this.store.compact(docId);
-        cached.storedCount = 1;
-      } catch (error) {
-        console.error(`Could not compact doc "${docId}"; its log keeps growing until a compaction succeeds`, error);
-      }
+    await this.compactWhenLong(docId, cached);
+  }
+
+  private async compactWhenLong(docId: string, cached: CachedDoc): Promise<void> {
+    if (cached.storedCount <= LOG_COMPACT_AFTER_RECORDS) return;
+    try {
+      await this.store.compact(docId);
+      cached.storedCount = 1;
+    } catch (error) {
+      console.error(`Could not compact doc "${docId}"; its log keeps growing until a compaction succeeds`, error);
     }
   }
 
@@ -235,7 +277,8 @@ export class Hub {
     }
   }
 
-  private relay(from: Connection, docId: string, change: Uint8Array): void {
+  /** Sends the change to every welcomed client except `from`, the one it came from (null for a change made here). */
+  private relay(from: Connection | null, docId: string, change: Uint8Array): void {
     const frame = encodeFrame({ type: FrameType.Update, docId, payload: change });
     for (const connection of this.connections) {
       if (connection !== from && connection.welcomed) this.send(connection, frame);

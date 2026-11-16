@@ -5,9 +5,9 @@
  * MIRROR_DELAY_MS after the last change to that doc, one plan at a time.
  * Docs and blobs are read from the store, never from the hub's cache. A plan
  * that fails is logged and its changes are tried again with the next change;
- * nothing here throws into a sync write or a blob upload. This is the only
- * server file that reads what is inside a doc, and it does so through
- * `@looseleaf/model`.
+ * nothing here throws into a sync write or a blob upload. Together with
+ * `notes-writer.ts`, this is the only server code that reads what is inside a
+ * doc, and it does so through `@looseleaf/model`.
  */
 import { join } from 'node:path';
 import * as Y from 'yjs';

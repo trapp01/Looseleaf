@@ -1,11 +1,13 @@
 /**
  * Test helpers: a real server on an ephemeral port over a temporary data
  * folder, sync clients on in-memory stores using `ws`, a socket wrapper the
- * test can cut or block, and convergence checks.
+ * test can cut or block, convergence checks, and an MCP client.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { afterEach, expect } from 'vitest';
 import WebSocket from 'ws';
 import * as Y from 'yjs';
@@ -262,6 +264,25 @@ export async function rawSocket(server: TestServer): Promise<{ socket: WebSocket
 
 export function sendFrame(socket: WebSocket, type: FrameType, docId: string, payload: Uint8Array): void {
   socket.send(encodeFrame({ type, docId, payload }));
+}
+
+/** An MCP SDK client connected to the server's /mcp endpoint with the test token. */
+export async function mcpClient(server: Pick<TestServer, 'url'>): Promise<Client> {
+  const client = new Client({ name: 'looseleaf-test', version: '1.0.0' });
+  const transport = new StreamableHTTPClientTransport(new URL(`${server.url}/mcp`), {
+    requestInit: { headers: { Authorization: `Bearer ${TOKEN}` } },
+  });
+  await client.connect(transport);
+  return client;
+}
+
+/** The text of a tool result and whether it is an error. */
+export async function call(client: Client, name: string, args: Record<string, unknown> = {}): Promise<{ text: string; isError: boolean }> {
+  const result = await client.callTool({ name, arguments: args });
+  const content = result.content as Array<{ type: string; text: string }>;
+  expect(content).toHaveLength(1);
+  expect(content[0]!.type).toBe('text');
+  return { text: content[0]!.text, isError: result.isError === true };
 }
 
 /** The updates a doc emits while `edit` runs, one per transaction. */

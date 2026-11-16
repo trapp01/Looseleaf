@@ -1,13 +1,16 @@
 /**
  * The MCP endpoint's tools: their definitions, their argument checks and what
- * each one answers, read from a running mirror. Pages, their order and ids
- * come from the mirror manifest; text comes from the mirror's page files,
- * read through `MirrorView.readText`. Every tool is read-only. A mistake the
- * caller can fix (an unknown id, a bad argument) is a result with `isError`
- * set. This file knows nothing about JSON-RPC or HTTP.
+ * each one answers. The read tools read a running mirror: pages, their order
+ * and ids come from the mirror manifest, and text comes from the mirror's page
+ * files, read through `MirrorView.readText`. The write tools (create_page,
+ * append_to_page) change the docs through `NotesWriter`, and the mirror shows
+ * the change after its delay. A mistake the caller can fix (an unknown id, a
+ * bad argument) is a result with `isError` set. This file knows nothing about
+ * JSON-RPC or HTTP.
  */
 import type { MirrorManifest, MirrorPage } from '@looseleaf/model';
 import type { MirrorView } from './mirror.js';
+import type { NotesWriter, WriteOutcome } from './notes-writer.js';
 
 export const SEARCH_DEFAULT_LIMIT = 20;
 export const SEARCH_MAX_LIMIT = 100;
@@ -25,7 +28,13 @@ export interface McpToolDefinition {
     required?: string[];
     additionalProperties: false;
   };
-  annotations: { readOnlyHint: true };
+  annotations: { readOnlyHint: boolean };
+}
+
+/** What the tools read and write: the running mirror, and the writer that changes the docs. */
+export interface McpNotes {
+  mirror: MirrorView;
+  writer: NotesWriter;
 }
 
 interface JsonSchemaProperty {
@@ -41,7 +50,14 @@ export interface McpToolResult {
   isError?: true;
 }
 
-const readOnly = { readOnlyHint: true } as const;
+const readOnly = { readOnlyHint: true };
+const writes = { readOnlyHint: false };
+
+const MARKDOWN_HELP =
+  'Markdown supported: paragraphs, # headings 1-6, - and 1. lists (nested by indenting), - [ ] and - [x] to-do items, ' +
+  '**bold**, *italic*, ~~strike~~, [links](https://…), > quotes, ``` fenced code and | pipe | tables. A single line ' +
+  'break inside a paragraph is a space; end the line with two spaces or a backslash, or write <br>, for a line break. ' +
+  'Inline `code` keeps its text without the backticks. Pictures cannot be added.';
 
 export const MCP_TOOLS: readonly McpToolDefinition[] = [
   {
@@ -103,21 +119,74 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     },
     annotations: readOnly,
   },
+  {
+    name: 'create_page',
+    description:
+      'Creates a new page at the end of a section, with a title and optional Markdown text, and answers with its page ' +
+      'id. The new page shows in read_page, list_pages and search_notes a few seconds later. ' +
+      MARKDOWN_HELP,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        section_id: { type: 'string', description: 'A section id from list_notebooks.' },
+        title: { type: 'string', description: 'The page title.' },
+        markdown: { type: 'string', description: 'The page text as Markdown. Leave it out for an empty page.' },
+      },
+      required: ['section_id', 'title'],
+      additionalProperties: false,
+    },
+    annotations: writes,
+  },
+  {
+    name: 'append_to_page',
+    description:
+      'Adds Markdown text to the end of a page, after everything already on it; nothing already on the page is changed ' +
+      'or moved. The text shows in read_page and search_notes a few seconds later. ' +
+      MARKDOWN_HELP,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        page_id: { type: 'string', description: 'A page id from list_pages, search_notes or create_page.' },
+        markdown: { type: 'string', description: 'The text to add, as Markdown.' },
+      },
+      required: ['page_id', 'markdown'],
+      additionalProperties: false,
+    },
+    annotations: writes,
+  },
 ];
 
 /** Thrown by `callMcpTool` for a tool name it does not have. */
 export class UnknownToolError extends Error {}
 
 /**
- * Runs a tool against the mirror's current state. `args` is the request's
- * `arguments` as received. Throws UnknownToolError for a name that is not in
- * MCP_TOOLS; any other throw is a server fault.
+ * Runs a tool: a read tool against the mirror's current state, a write tool
+ * through the writer. `args` is the request's `arguments` as received. Throws
+ * UnknownToolError for a name that is not in MCP_TOOLS; any other throw is a
+ * server fault.
  */
-export async function callMcpTool(mirror: MirrorView, name: string, args: unknown): Promise<McpToolResult> {
+export async function callMcpTool(notes: McpNotes, name: string, args: unknown): Promise<McpToolResult> {
   const tool = MCP_TOOLS.find((candidate) => candidate.name === name);
   if (tool === undefined) throw new UnknownToolError(`No tool is named "${name}". The tools are ${MCP_TOOLS.map((t) => t.name).join(', ')}.`);
   const checked = checkArguments(tool, args);
   if (typeof checked === 'string') return failure(checked);
+  if (tool.name === 'create_page') {
+    const title = (checked.title as string).replace(/\s*[\r\n]+\s*/g, ' ').trim();
+    if (title === '') return failure('The title is empty. Give the page a title.');
+    const markdown = checked.markdown as string | undefined;
+    const outcome = await notes.writer.createPage({
+      sectionId: checked.section_id as string,
+      title,
+      markdown: markdown === undefined || markdown.trim() === '' ? undefined : markdown,
+    });
+    return answerWrite('create', outcome, checked.section_id as string);
+  }
+  if (tool.name === 'append_to_page') {
+    const markdown = checked.markdown as string;
+    if (markdown.trim() === '') return failure('The markdown is empty. Give the text to add to the page.');
+    return answerWrite('append', await notes.writer.appendToPage({ pageId: checked.page_id as string, markdown }), checked.page_id as string);
+  }
+  const { mirror } = notes;
   const manifest = mirror.manifest;
   if (manifest === null) return failure('The mirror of the notes is still being built. Try again in a few seconds.');
   switch (tool.name) {
@@ -305,6 +374,32 @@ async function readPage(mirror: MirrorView, manifest: MirrorManifest, pageId: st
   const text = await mirror.readText(page.path);
   if (text === null) return failure(`The page "${titleOf(page)}" is being rewritten in the mirror. Try again in a few seconds.`);
   return success(text);
+}
+
+/** The answer to a write. `id` is the section id (create) or page id (append) the caller gave. */
+function answerWrite(action: 'create' | 'append', outcome: WriteOutcome, id: string): McpToolResult {
+  switch (outcome.kind) {
+    case 'no-section':
+      return failure(`No section has the id "${id}". Call list_notebooks to see the section ids.`);
+    case 'section-deleted':
+      return failure(`The section with the id "${id}" is in Deleted notes. Pick another section from list_notebooks.`);
+    case 'no-page':
+      return failure(`No page has the id "${id}". Call search_notes or list_pages to find page ids.`);
+    case 'page-deleted':
+      return failure(`The page with the id "${id}" is in Deleted notes. Add to another page, or make a new one with create_page.`);
+    case 'written': {
+      const { page, warnings } = outcome;
+      const where = `section ${page.section.path.join(' / ')} (section id: ${page.section.id}) in notebook ${page.notebook.name}`;
+      const lines = [
+        action === 'append'
+          ? `Added the text to the end of "${page.title || 'Untitled page'}" (page id: ${page.id}) in ${where}.`
+          : `Created the page "${page.title}" (page id: ${page.id}) at the end of ${where}.`,
+        'read_page and search_notes show it in a few seconds.',
+      ];
+      for (const warning of warnings) lines.push(`Note: ${warning}.`);
+      return success(lines.join('\n'));
+    }
+  }
 }
 
 function sectionPath(page: MirrorPage): string {

@@ -1,8 +1,6 @@
 import { mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as Y from 'yjs';
 import {
@@ -20,7 +18,7 @@ import { blobHash } from '@looseleaf/sync';
 import { SEARCH_DEFAULT_LIMIT, SEARCH_MAX_LIMIT } from '../src/mcp-tools.js';
 import { MCP_MAX_BODY_BYTES, MCP_PROTOCOL_VERSIONS } from '../src/mcp.js';
 import { SERVER_VERSION, startServer, type RunningServer } from '../src/server.js';
-import { connectedClient, editDoc, makeClient, TestServer, TOKEN, waitFor, waitForSynced } from './harness.js';
+import { call, connectedClient, editDoc, makeClient, mcpClient, TestServer, TOKEN, waitFor, waitForSynced } from './harness.js';
 
 const DELAY_MS = 100;
 const CREATED = Date.UTC(2026, 3, 2, 8, 0);
@@ -144,24 +142,6 @@ async function waitForFile(path: string, contains: string): Promise<void> {
   await waitFor(async () => ((await readFile(path, 'utf8').catch(() => '')) as string).includes(contains), `${path} to contain "${contains}"`);
 }
 
-async function mcpClient(server: Pick<TestServer, 'url'>): Promise<Client> {
-  const client = new Client({ name: 'looseleaf-test', version: '1.0.0' });
-  const transport = new StreamableHTTPClientTransport(new URL(`${server.url}/mcp`), {
-    requestInit: { headers: { Authorization: `Bearer ${TOKEN}` } },
-  });
-  await client.connect(transport);
-  return client;
-}
-
-/** The text of a tool result and whether it is an error. */
-async function call(client: Client, name: string, args: Record<string, unknown> = {}): Promise<{ text: string; isError: boolean }> {
-  const result = await client.callTool({ name, arguments: args });
-  const content = result.content as Array<{ type: string; text: string }>;
-  expect(content).toHaveLength(1);
-  expect(content[0]!.type).toBe('text');
-  return { text: content[0]!.text, isError: result.isError === true };
-}
-
 /** One raw JSON-RPC POST to /mcp. */
 function post(server: TestServer, body: unknown, headers: Record<string, string> = {}): Promise<Response> {
   return fetch(`${server.url}/mcp`, {
@@ -190,19 +170,21 @@ describe('the MCP endpoint, through the SDK client', () => {
   }, 30_000);
   afterAll(() => sharedServer.stop());
 
-  it('initializes and lists four read-only tools with schemas', async () => {
+  it('initializes and lists four read-only tools and two write tools with schemas', async () => {
     const { server } = shared;
     const client = await mcpClient(server);
     expect(client.getServerVersion()).toEqual({ name: 'looseleaf', version: SERVER_VERSION });
     expect(client.getServerCapabilities()).toEqual({ tools: {} });
-    expect(client.getInstructions()).toContain('read-only');
+    expect(client.getInstructions()).toContain('neither changes or removes anything');
     const { tools } = await client.listTools();
-    expect(tools.map((tool) => tool.name)).toEqual(['list_notebooks', 'list_pages', 'search_notes', 'read_page']);
+    expect(tools.map((tool) => tool.name)).toEqual(['list_notebooks', 'list_pages', 'search_notes', 'read_page', 'create_page', 'append_to_page']);
     for (const tool of tools) {
       expect(tool.inputSchema).toMatchObject({ type: 'object', additionalProperties: false });
-      expect(tool.annotations).toEqual({ readOnlyHint: true });
+      expect(tool.annotations).toEqual({ readOnlyHint: !['create_page', 'append_to_page'].includes(tool.name) });
       expect(tool.description).not.toBe('');
     }
+    expect(tools[4]!.inputSchema.required).toEqual(['section_id', 'title']);
+    expect(tools[5]!.inputSchema.required).toEqual(['page_id', 'markdown']);
     expect(tools[2]!.inputSchema.required).toEqual(['query']);
     expect(tools[2]!.inputSchema.properties!.limit).toMatchObject({ type: 'integer', minimum: 1, maximum: SEARCH_MAX_LIMIT });
     expect(await client.ping()).toEqual({});

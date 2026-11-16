@@ -9,15 +9,16 @@ through and the place backups live. Words in **bold** are defined in
 
 | Package | Owns | Refuses to know |
 | --- | --- | --- |
-| `packages/model` | What a library, notebook, page and container are; the rich-text schema; reading and writing them inside Yjs docs; export to HTML, Markdown, text and JSON; planning a mirror; turning an import tree into docs. | Networking, storage, the DOM, React. |
+| `packages/model` | What a library, notebook, page and container are; the rich-text schema; reading and writing them inside Yjs docs; export to HTML, Markdown, text and JSON; planning a mirror; turning an import tree into docs and Markdown into rich text. | Networking, storage, the DOM, React. |
 | `packages/sync` | The wire protocol, the replica store interface, and the client that keeps a replica in step with a server. | What is inside a doc. Doc ids and bytes are opaque. |
-| `packages/server` | The hub: doc and blob storage on disk, the sync endpoint, snapshots, the mirror on disk, the MCP endpoint, serving the web client. | What is inside a doc. Only `mirror.ts` reads one, and only through `model`; `mirror-folder.ts` knows a mirror folder on disk and nothing about the server. |
+| `packages/server` | The hub: doc and blob storage on disk, the sync endpoint, snapshots, the mirror on disk, the MCP endpoint, serving the web client. | What is inside a doc. Only `mirror.ts` (which reads docs for the mirror) and `notes-writer.ts` (which reads and writes them for the MCP write tools) look inside one, and only through `model`; the hub changes a doc only through a callback it is handed. `mirror-folder.ts` knows a mirror folder on disk and nothing about the server. |
 | `packages/onenote` | Reading Microsoft `.one` files into an import tree. | Yjs, storage, UI. |
 | `packages/web` | The user interface. Runs in a browser, inside the desktop shell, and later inside a mobile shell. | Disk paths, Electron APIs (it talks to the shell through one small bridge). |
 | `packages/desktop` | The Electron shell: window, native menus, PDF output, file dialogs, remembering the mirror folder the person chose and writing a mirror's files into it. | Notes. It hosts `packages/web` unchanged. |
 
 Imports flow one way: `web → model, sync, onenote`; `server → sync, model`
-(`model` from `mirror.ts` only; the hub and the store never read a doc);
+(`model` from `mirror.ts` and `notes-writer.ts`, plus mirror manifest types in
+`mcp-tools.ts`; the hub and the store never read a doc);
 `onenote → model` (types only); `desktop → server, model` (`mirror-folder.ts`
 and `model`'s `mirror-manifest` only; otherwise it loads the built web client).
 `model` and `sync` do not import each other. This is prose
@@ -310,15 +311,31 @@ disk; the hub only reports which doc id changed. Snapshots do not copy
 
 `POST /mcp` on the server speaks the Model Context Protocol (streamable HTTP,
 stateless, JSON responses; `GET` and `DELETE` answer 405) so an AI assistant
-on the same network can search and read the notes. It takes the same bearer
-token as the blob routes. It serves the server's mirror and nothing else: the
-tools list notebooks and pages from the mirror manifest (so a section with no
-pages is not listed), search the mirror's Markdown files on each call, and
-return a page's file. Files are read only at paths the manifest lists,
-through `MirrorFolder.readText`, which refuses a path that resolves outside
-the folder. Every tool is read-only. With the mirror off the route answers
-404. The protocol is in `mcp.ts`, the tools in `mcp-tools.ts`; the runtime
-uses no MCP SDK.
+on the same network can search, read and add to the notes. It takes the same
+bearer token as the blob routes. With the mirror off the route answers 404.
+The protocol is in `mcp.ts`, the tools in `mcp-tools.ts`; the runtime uses no
+MCP SDK.
+
+The read tools serve the server's mirror and nothing else: they list
+notebooks and pages from the mirror manifest (so a section with no pages is
+not listed), search the mirror's Markdown files on each call, and return a
+page's file. Files are read only at paths the manifest lists, through
+`MirrorFolder.readText`, which refuses a path that resolves outside the
+folder.
+
+The write tools never touch the mirror. `create_page` adds a top-level page
+at the end of a section, with its Markdown in one text container;
+`append_to_page` adds Markdown after the end of the page's last text
+container in reading order (or, on a page with none, in a new text container
+below everything else) and bumps the page's `modifiedAt`. Neither rewrites,
+moves or removes anything already in a doc, so a write merges with edits
+made anywhere else at the same time. `model` turns the Markdown into rich
+text (`import-markdown.ts`, the inverse of the Markdown export).
+`notes-writer.ts` makes each change through `Hub.withDoc`, which runs a
+callback on the doc in one transaction inside the doc's queue, stores the
+resulting update and relays it to every connected client, as an update from
+a client would be. The store reports the doc as stored, so the mirror
+rewrites the page after its delay and the read tools show the write then.
 
 ## Clients
 

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import {
   addTextContainer,
+  appendToPage,
+  markdownToBody,
   createGroup,
   createNotebook,
   createPage,
@@ -59,6 +61,25 @@ describe('convergence', () => {
     expect(text).toContain('beta ');
     expect(text).toContain('base');
     expect(readPage(a)).toEqual(readPage(b));
+  });
+
+  it('keeps Markdown appended on one replica and typing on another in the same container', async () => {
+    const a = new Y.Doc();
+    const t = addTextContainer(a, {
+      x: 0,
+      y: 0,
+      width: 100,
+      body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'base' }] }] },
+    });
+    const b = forkDoc(a);
+    appendToPage(a, (await markdownToBody('- [ ] parked for later')).body);
+    typeAtStart(b, t, 'offline ');
+    addTextContainer(b, { x: 0, y: 400, width: 100 });
+    syncDocs(a, b);
+    expectConverged(a, b);
+    expect(readPage(a)).toEqual(readPage(b));
+    expect(containerText(a, t)).toBe('offline base\nparked for later');
+    expect(readPage(a).containers).toHaveLength(2);
   });
 
   it('two replicas moving one node to different places leaves one node', () => {

@@ -21,7 +21,8 @@ A free, open-source notebook app laid out like OneNote, that you host yourself.
 - **Readable without Looseleaf.** The server keeps every page as a Markdown
   file in `data/mirror`, updated a few seconds after each edit.
 - **Ask an assistant.** The server answers AI assistants such as Claude Code
-  at an MCP endpoint, so they can search and read your notes. Read-only.
+  at an MCP endpoint, so they can search and read your notes, add a page, or
+  add text to the end of a page. They cannot change or remove what is there.
 - **Web, desktop, phone.** One web client that also runs as a desktop app and
   fits a phone screen. Native mobile apps are planned.
 

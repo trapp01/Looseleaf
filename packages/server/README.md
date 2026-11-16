@@ -115,11 +115,15 @@ folder is then neither written nor removed.
 ## MCP endpoint
 
 `POST /mcp` speaks the [Model Context Protocol](https://modelcontextprotocol.io)
-over streamable HTTP, so an AI assistant can search and read the notes. It is
-stateless and answers every request with plain JSON: no sessions and no event
-stream. It takes the same bearer token as the blob routes and reads the
-mirror and nothing else, so it needs the mirror on; with `LOOSELEAF_MIRROR=off`
-it answers 404. Every tool is read-only.
+over streamable HTTP, so an AI assistant can search and read the notes and add
+to them. It is stateless and answers every request with plain JSON: no
+sessions and no event stream. It takes the same bearer token as the blob
+routes. The read tools read the mirror and nothing else, so the endpoint needs
+the mirror on; with `LOOSELEAF_MIRROR=off` it answers 404. The write tools
+change the notes the way a connected client would: the change is stored,
+sent to every connected device, and shows in the mirror (and so in the read
+tools) about 5 seconds later. They only add; nothing already in the notes is
+changed, moved or removed. A request body may be up to 64 KB.
 
 | Tool | Arguments | Returns |
 | --- | --- | --- |
@@ -127,6 +131,16 @@ it answers 404. Every tool is read-only.
 | `list_pages` | `section_id` | The section's pages in order, with ids, titles and subpage levels. |
 | `search_notes` | `query`, `notebook_id` (optional), `limit` (optional, default 20, at most 100) | Pages whose title or text holds every word of the query, ignoring case: pages with every word in the title first, then by number of occurrences. Each result has the page id, title, notebook, section and up to 3 matching lines. |
 | `read_page` | `page_id` | The page's mirror file: front matter, then the page as Markdown. Pictures and attached files stay as links to `mirror/assets/`. |
+| `create_page` | `section_id`, `title`, `markdown` (optional) | Adds a top-level page at the end of the section, with the Markdown in one text container (no container without it), and answers with its page id, notebook and section. |
+| `append_to_page` | `page_id`, `markdown` | Adds the Markdown after the end of the page's last text container in reading order, or in a new text container below everything else when the page has none, and marks the page modified. |
+
+The write tools read the Markdown the Markdown export writes: paragraphs,
+headings, bullet and ordered lists with nesting, `- [ ]` and `- [x]` to-do
+items (the To Do tag), `[Important]`-style tag markers, bold, italic, strike,
+`<u>`, `<sub>`, `<sup>`, links, `>` quotes and fenced code (the quote and code
+paragraph styles), pipe tables and hard line breaks. Inline code keeps its
+text without a code mark, since the editor has none; an ordered list always
+starts at 1; pictures cannot be added. Anything else stays as plain text.
 
 Results are text written for a model to read, and always carry the ids the
 next call needs. Search reads the mirror's files on each call. While the

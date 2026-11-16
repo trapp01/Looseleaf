@@ -6,7 +6,7 @@
  */
 import * as Y from 'yjs';
 import { newId } from './ids.js';
-import { assertValidBody, bodyToText, emptyBody, readBody, writeBody, type JSONContent } from './rich-text.js';
+import { appendBody, assertValidBody, bodyToText, emptyBody, readBody, writeBody, type JSONContent } from './rich-text.js';
 
 export const PAPER_STYLES = [
   'none',
@@ -156,6 +156,31 @@ export function addTextContainer(
   return insertContainer(doc, { kind: 'text', x: input.x, y: input.y, width: input.width }, body);
 }
 
+/** Where `appendToPage` puts a text container on a page that has none, matching where the web client places new content. */
+const APPENDED_CONTAINER = { x: 48, width: 400, gap: 24 } as const;
+/** The height the web client draws a file container at; file containers store no height. */
+const FILE_CONTAINER_HEIGHT = 64;
+
+/**
+ * Adds the body's blocks after everything in the page's last text container
+ * in reading order, the order the exports use. On a page with no text
+ * container it adds one at the left margin, below every picture and file.
+ * Nothing already on the page changes. Returns the container's id. Throws
+ * when the body does not fit the rich-text schema.
+ */
+export function appendToPage(doc: Y.Doc, body: JSONContent): string {
+  assertValidBody(body);
+  const ordered = readContainers(doc).sort(byReadingOrder);
+  const last = ordered.filter((c) => c.kind === 'text').at(-1);
+  if (last !== undefined) {
+    appendBody(textContainerBody(doc, last.id), body);
+    return last.id;
+  }
+  const bottom = Math.max(0, ...ordered.map((c) => c.y + (c.kind === 'image' ? c.height : FILE_CONTAINER_HEIGHT)));
+  const { x, width, gap } = APPENDED_CONTAINER;
+  return addTextContainer(doc, { x, y: bottom + gap, width, body });
+}
+
 /** Adds a picture on top of the others and returns its id. The blob must already be stored. */
 export function addImageContainer(
   doc: Y.Doc,
@@ -266,9 +291,14 @@ function readContainers(doc: Y.Doc): Container[] {
   return list;
 }
 
+/** Reading order: top to bottom, then left to right. Every export and the mirror read a page in this order. */
+function byReadingOrder(a: Container, b: Container): number {
+  return a.y - b.y || a.x - b.x || (a.id < b.id ? -1 : 1);
+}
+
 /** A plain copy of the page, for export and search. */
 export function readPage(doc: Y.Doc): PageSnapshot {
-  const ordered = readContainers(doc).sort((a, b) => a.y - b.y || a.x - b.x || (a.id < b.id ? -1 : 1));
+  const ordered = readContainers(doc).sort(byReadingOrder);
   const strokeList: PageSnapshot['strokes'] = [];
   strokes(doc).forEach((s, id) => strokeList.push({ id, ...s, points: [...s.points] }));
   strokeList.sort((a, b) => (a.id < b.id ? -1 : 1));
