@@ -45,6 +45,10 @@ docker compose up -d
 docker compose logs looseleaf   # prints the access token on first start
 ```
 
+That pulls `ghcr.io/trapp01/looseleaf:latest`, published from `main` for amd64 and
+arm64. To update, run `docker compose pull && docker compose up -d`. To build
+from the checkout instead, run `docker compose up -d --build`.
+
 Open `http://<your-server>:8421` and enter the access token. Notes live in the
 `data` volume. `data/docs` and `data/blobs` are the notes as the server stores
 them; back that folder up however you back up anything else. `data/mirror` is

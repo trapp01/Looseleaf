@@ -13,7 +13,8 @@ the WebSocket share one port.
 | `pnpm --filter @looseleaf/server dev` | Runs `src/main.ts` with `tsx watch`. |
 | `pnpm --filter @looseleaf/server build` | Bundles the server and its dependencies into `dist/server.js` with esbuild. |
 | `pnpm --filter @looseleaf/server start` | Runs the bundle: `node dist/server.js`. |
-| `docker compose up -d` | Builds the image from the repo root `Dockerfile` and runs it with a named volume. |
+| `docker compose up -d` | Pulls `ghcr.io/trapp01/looseleaf:latest` and runs it with a named volume. |
+| `docker compose up -d --build` | Builds the image from the repo root `Dockerfile` instead of pulling it. |
 
 The bundle needs only Node 22; copy `dist/server.js` anywhere and run it.
 

@@ -1,7 +1,8 @@
 services:
   looseleaf:
+    # The published image. `docker compose up -d --build` builds from this checkout instead.
+    image: ghcr.io/trapp01/looseleaf:latest
     build: .
-    image: looseleaf
     restart: unless-stopped
     ports:
       - "8421:8421"

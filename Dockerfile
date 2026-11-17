@@ -1,7 +1,10 @@
 # Looseleaf server with the web client, in one image.
+# Published as ghcr.io/trapp01/looseleaf on every push to main that passes CI.
 # Build: docker build -t looseleaf .    Run: see docker-compose.yml and packages/server/README.md.
 
-FROM node:22-slim AS build
+# The build output is JavaScript and static files, so this stage runs on the builder's own CPU
+# whatever platform the image is for.
+FROM --platform=$BUILDPLATFORM node:22-slim AS build
 # The desktop package is never installed here, but keep Electron's binary download off regardless.
 ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 RUN corepack enable
