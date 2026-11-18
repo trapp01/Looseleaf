@@ -4,6 +4,7 @@
  * planning, and import from an import tree or from Markdown. No DOM, network or storage; runs in Node and browsers.
  */
 export { newId, LIBRARY_DOC_ID, notebookDocId, pageDocId } from './ids.js';
+export { APP_ADDRESS_SCHEME, appPageAddress, pageHash, pageIdFromAppAddress, pageIdFromHash } from './page-address.js';
 export { sortByOrder, orderAt, type Ordered } from './order.js';
 export { COLORS, colorHex, isColorName, nearestColor, type ColorName } from './colors.js';
 export {

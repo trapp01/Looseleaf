@@ -350,6 +350,17 @@ a secure context with stable IndexedDB storage. A mobile shell (Capacitor) can
 host the same build; nothing in `web` may assume a mouse, a hover state or a
 wide screen.
 
+### Page addresses
+
+A page address lets another program open one page. Its two forms are defined
+in `packages/model/src/page-address.ts`: the web client's URL ending in
+`#page=<pageId>`, and `looseleaf://page/<pageId>`, a scheme the desktop app
+registers with the operating system. The desktop shell turns the second into
+the first by setting the window's fragment, so the web client has one way in
+(`nav/open-page-address.ts`): it selects the page, in whichever notebook holds
+it, and removes the fragment. A page that has not synced yet opens when it
+arrives. An address for a page this replica never receives does nothing.
+
 ## Import and export
 
 Importers produce an **import tree** (`packages/model/src/import-tree.ts`).

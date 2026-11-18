@@ -3,7 +3,8 @@
  * rail, sections, pages, canvas) or the phone drill-down, plus the dialogs.
  * It also wires the things that span the app: keeping the selection valid
  * against the live tree, keyboard shortcuts and native menu commands through
- * the command table, recent pages, keeping the search index fresh, and asking
+ * the command table, recent pages, keeping the search index fresh, opening the
+ * page a page address names, and asking
  * before the tab closes while changes are not yet stored.
  */
 import { useEffect, useSyncExternalStore } from 'react';
@@ -22,6 +23,7 @@ import { NavPanel } from '../nav/NavPanel.js';
 import { DeletedNotes } from '../nav/DeletedNotes.js';
 import { EmptyLibrary, EmptySection } from '../nav/EmptyStates.js';
 import { useNotebooks, useNotebookTree } from '../nav/notebook-docs.js';
+import { useOpenPageAddress } from '../nav/open-page-address.js';
 import { ContextMenuHost } from '../nav/context-menu.js';
 import { PhoneShell, PhoneTopBar } from '../phone/PhoneShell.js';
 import { useSearchIndexing } from '../search/use-search-indexing.js';
@@ -64,6 +66,7 @@ export function AppShell({ persistent }: { persistent: boolean }) {
   }, [recent, sel.notebookId, sel.sectionId, sel.pageId]);
 
   useSearchIndexing(services);
+  useOpenPageAddress(services);
 
   const { client } = services;
   useEffect(() => guardLeaving(() => client.status.unstoredDocs > 0), [client]);

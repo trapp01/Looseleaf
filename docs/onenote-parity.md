@@ -30,7 +30,7 @@ Status: **built**, **partial** (note says what is missing), **planned**,
 | Make subpage / promote subpage | built | |
 | Move or copy page to another section | partial | Move is built within a notebook. Moving to another notebook and copy are planned. |
 | Move or copy section | partial | Move is built within a notebook. Moving to another notebook and copy are planned. |
-| Copy link to page / section / notebook | planned | |
+| Copy link to page / section / notebook | partial | Every page has a page address that opens it in the web client or the desktop app (see the glossary). No command copies one yet; sections and notebooks have none. |
 | Deleted notes: view, restore, empty | partial | Emptying removes pages, sections and groups for good. A deleted notebook stays restorable; removing one for good is planned. |
 | Page versions | planned | Yjs keeps the history needed; no viewer yet. |
 | Set as default template | planned | |

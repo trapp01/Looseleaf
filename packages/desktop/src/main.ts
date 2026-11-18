@@ -1,7 +1,8 @@
 /**
  * The Electron main process: one window hosting the built web client from
  * app://looseleaf, the native menu, and the bridge's IPC handlers. It knows
- * nothing about notes.
+ * nothing about notes. A `looseleaf://page/<pageId>` address from the operating
+ * system is passed to the web client as its `#page=` fragment.
  *
  * Unpackaged runs read three environment variables: LOOSELEAF_WEB_URL loads a
  * development server instead of the built files, LOOSELEAF_WEB_DIR serves another
@@ -12,6 +13,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, screen, session, shell, type WebContents } from 'electron';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { APP_ADDRESS_SCHEME, pageHash, pageIdFromAppAddress } from '@looseleaf/model/page-address';
 import { createHandlers } from './ipc.js';
 import { CHANNELS } from './channels.js';
 import { menuTemplate } from './menu.js';
@@ -39,14 +41,24 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let mainWindow: BrowserWindow | null = null;
+// A page address that arrived before there was a window to show it in. Windows and Linux pass it as an argument.
+let pendingPageId: string | null = pageIdFromArgs(process.argv);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
+    const pageId = pageIdFromArgs(argv);
+    if (pageId !== null) return showPage(pageId);
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
+  });
+  // macOS delivers a page address here, before the app is ready when the address launched it.
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    const pageId = pageIdFromAppAddress(url);
+    if (pageId !== null) showPage(pageId);
   });
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin' || smoke) app.quit();
@@ -63,6 +75,8 @@ if (!app.requestSingleInstanceLock()) {
 
 function start(): void {
   app.setAboutPanelOptions({ applicationName: 'Looseleaf', applicationVersion: app.getVersion() });
+  // An unpackaged run would register the bare Electron binary, which opens without this app.
+  if (app.isPackaged) app.setAsDefaultProtocolClient(APP_ADDRESS_SCHEME);
   serveWebClient();
   allowOnlyClipboardPermissions();
   registerIpc();
@@ -175,9 +189,35 @@ function createWindow(): void {
   if (smoke) reportSmokeResult(window);
   else window.once('ready-to-show', () => window.show());
 
-  window.loadURL(devWebUrl ?? APP_URL).catch((error: unknown) => {
-    console.error(`Could not load ${devWebUrl ?? APP_URL}:`, error);
+  const url = (devWebUrl ?? APP_URL) + (pendingPageId === null ? '' : pageHash(pendingPageId));
+  pendingPageId = null;
+  window.loadURL(url).catch((error: unknown) => {
+    console.error(`Could not load ${url}:`, error);
   });
+}
+
+function pageIdFromArgs(argv: string[]): string | null {
+  for (const arg of argv) {
+    const pageId = pageIdFromAppAddress(arg);
+    if (pageId !== null) return pageId;
+  }
+  return null;
+}
+
+/** Brings the window forward on a page, opening the window first when there is none. */
+function showPage(pageId: string): void {
+  if (!mainWindow) {
+    pendingPageId = pageId;
+    if (app.isReady()) createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  // Setting the fragment is what a followed link does; the web client opens the page from it. A page id has no characters that need escaping.
+  mainWindow.webContents
+    .executeJavaScript(`window.location.hash = ${JSON.stringify(pageHash(pageId))}`)
+    .catch((error: unknown) => console.error(`Could not open page ${pageId}:`, error));
 }
 
 /** Keeps every page on the app's origin; http(s) and mailto links open in the system browser. */

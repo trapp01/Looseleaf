@@ -11,7 +11,7 @@ nothing about notes. The web client talks to it only through
 
 | File | Owns |
 | --- | --- |
-| `src/main.ts` | App lifecycle, the window, the `app://` protocol, permissions, navigation guards, IPC registration. |
+| `src/main.ts` | App lifecycle, the window, the `app://` protocol, permissions, navigation guards, IPC registration, and handing a `looseleaf://page/<pageId>` address from the operating system to the web client. |
 | `src/preload.ts` | Sets `window.looseleafShell` in the sandboxed page. |
 | `src/ipc.ts` | What each bridge call does: argument checks, folder grants, the remembered mirror folder, the work. No Electron imports. |
 | `src/onenote-files.ts` | Finding, listing and reading `.one` / `.onetoc2` files. Read-only. |

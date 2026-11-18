@@ -18,6 +18,8 @@ module.exports = {
   files: ['dist/**', 'package.json'],
   extraResources: [{ from: webDir, to: 'web' }],
   npmRebuild: false,
+  // Page addresses (looseleaf://page/<pageId>) open in this app; main.ts registers the scheme on Windows and Linux.
+  protocols: [{ name: 'Looseleaf page', schemes: ['looseleaf'] }],
   // The packaged binary cannot be turned into a plain Node runtime or debugger by flags or environment.
   electronFuses: {
     runAsNode: false,

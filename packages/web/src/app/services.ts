@@ -96,7 +96,8 @@ function liveEditor(services: Services): Editor | null {
   return editor && !editor.isDestroyed && services.ui.get().view === 'page' ? editor : null;
 }
 
-function searchablePages(notebooks: NotebookDocs): SearchablePage[] {
+/** Every page of every live notebook that is open, with the notebook and section it sits in. */
+export function searchablePages(notebooks: NotebookDocs): SearchablePage[] {
   const pages: SearchablePage[] = [];
   const live = new Set(listNotebooks(notebooks.library).map((n) => n.id));
   for (const [notebookId, doc] of notebooks.docs.get()) {
