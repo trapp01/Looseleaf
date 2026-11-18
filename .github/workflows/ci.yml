@@ -104,7 +104,6 @@ jobs:
       contents: write
     env:
       VERSION: 0.1.${{ github.run_number }}
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -126,6 +125,8 @@ jobs:
       # The app reads releases/download/latest/latest.json; between the delete and the create it finds nothing and tries again later.
       - name: Replace the "latest" release
         working-directory: packages/desktop/out
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --cleanup-tag --yes || true
           gh release create latest Looseleaf-arm64-mac.zip latest.json \
