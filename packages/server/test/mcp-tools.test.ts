@@ -22,14 +22,15 @@ import {
 } from '@looseleaf/model';
 import { DiskStore } from '../src/disk-store.js';
 import { Hub } from '../src/hub.js';
-import { callMcpTool, type McpNotes } from '../src/mcp-tools.js';
+import { Boards } from '../src/boards.js';
+import { callMcpTool, type McpContext } from '../src/mcp-tools.js';
 import { MirrorFolder } from '../src/mirror-folder.js';
 import type { MirrorView } from '../src/mirror.js';
 import { NotesWriter } from '../src/notes-writer.js';
 import { docFromStore, tempDir } from './harness.js';
 
-/** The read tools never touch the writer. */
-const readOnlyNotes = (mirror: MirrorView): McpNotes => ({ mirror, writer: {} as NotesWriter });
+/** The notes read tools never touch the writer or the boards. */
+const readOnlyNotes = (mirror: MirrorView): McpContext => ({ mirror, writer: {} as NotesWriter, boards: {} as Boards, baseUrl: '' });
 
 describe('the MCP tools over a mirror folder', () => {
   it('say the mirror is still being built before the first manifest', async () => {
@@ -113,7 +114,12 @@ async function writableLibrary() {
   await hub.withDoc(pageDocId(ids.planting), (doc) => {
     addTextContainer(doc, { x: 0, y: 0, width: 300, body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Water daily.' }] }] } });
   });
-  const notes: McpNotes = { mirror: { root: '', manifest: null, readText: async () => null, whenIdle: async () => undefined }, writer: new NotesWriter(hub) };
+  const notes: McpContext = {
+    mirror: { root: '', manifest: null, readText: async () => null, whenIdle: async () => undefined },
+    writer: new NotesWriter(hub),
+    boards: new Boards(hub, store),
+    baseUrl: '',
+  };
   const run = async (name: string, args: Record<string, unknown>) => {
     const result = await callMcpTool(notes, name, args);
     return { text: result.content[0]!.text, isError: result.isError === true };

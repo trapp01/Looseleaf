@@ -304,7 +304,7 @@ async function fileLength(path: string): Promise<number> {
 }
 
 /** Makes a rename in the folder durable. Some platforms cannot fsync a folder; there the rename is as durable as they allow. */
-async function syncFolder(path: string): Promise<void> {
+export async function syncFolder(path: string): Promise<void> {
   let folder;
   try {
     folder = await open(path, 'r');

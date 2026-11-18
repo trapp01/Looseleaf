@@ -15,7 +15,8 @@ import {
   pageDocId,
 } from '@looseleaf/model';
 import { blobHash } from '@looseleaf/sync';
-import { SEARCH_DEFAULT_LIMIT, SEARCH_MAX_LIMIT } from '../src/mcp-tools.js';
+import { SEARCH_DEFAULT_LIMIT, SEARCH_MAX_LIMIT } from '../src/mcp-notes-tools.js';
+import { MCP_TOOLS } from '../src/mcp-tools.js';
 import { MCP_MAX_BODY_BYTES, MCP_PROTOCOL_VERSIONS } from '../src/mcp.js';
 import { SERVER_VERSION, startServer, type RunningServer } from '../src/server.js';
 import { call, connectedClient, editDoc, makeClient, mcpClient, TestServer, TOKEN, waitFor, waitForSynced } from './harness.js';
@@ -170,17 +171,41 @@ describe('the MCP endpoint, through the SDK client', () => {
   }, 30_000);
   afterAll(() => sharedServer.stop());
 
-  it('initializes and lists four read-only tools and two write tools with schemas', async () => {
+  it('initializes and lists the notes tools, then the board tools, with schemas', async () => {
     const { server } = shared;
     const client = await mcpClient(server);
     expect(client.getServerVersion()).toEqual({ name: 'looseleaf', version: SERVER_VERSION });
     expect(client.getServerCapabilities()).toEqual({ tools: {} });
     expect(client.getInstructions()).toContain('neither changes or removes anything');
+    expect(client.getInstructions()).toContain('move_card it to a status of kind doing');
     const { tools } = await client.listTools();
-    expect(tools.map((tool) => tool.name)).toEqual(['list_notebooks', 'list_pages', 'search_notes', 'read_page', 'create_page', 'append_to_page']);
+    expect(tools.map((tool) => tool.name)).toEqual([
+      'list_notebooks',
+      'list_pages',
+      'search_notes',
+      'read_page',
+      'create_page',
+      'append_to_page',
+      'list_boards',
+      'get_board',
+      'search_cards',
+      'get_card',
+      'create_card',
+      'update_card',
+      'update_checklist',
+      'move_card',
+      'add_comment',
+      'add_link',
+      'archive_card',
+      'create_status',
+      'create_label',
+      'create_board',
+    ]);
+    expect(tools.map((tool) => tool.name)).toEqual(MCP_TOOLS.map((tool) => tool.name));
+    const readOnly = ['list_notebooks', 'list_pages', 'search_notes', 'read_page', 'list_boards', 'get_board', 'search_cards', 'get_card'];
     for (const tool of tools) {
       expect(tool.inputSchema).toMatchObject({ type: 'object', additionalProperties: false });
-      expect(tool.annotations).toEqual({ readOnlyHint: !['create_page', 'append_to_page'].includes(tool.name) });
+      expect(tool.annotations).toEqual({ readOnlyHint: readOnly.includes(tool.name) });
       expect(tool.description).not.toBe('');
     }
     expect(tools[4]!.inputSchema.required).toEqual(['section_id', 'title']);
@@ -363,13 +388,16 @@ describe('the MCP endpoint over raw HTTP', () => {
     }
   });
 
-  it('answers 404 naming LOOSELEAF_MIRROR when the mirror is off', async () => {
+  it('serves the board and write tools with the mirror off, and says the notes read tools need it', async () => {
     const server = await TestServer.start({ mirror: false });
-    for (const method of ['GET', 'POST']) {
-      const response = await fetch(`${server.url}/mcp`, { method, headers: { Authorization: `Bearer ${TOKEN}` } });
-      expect(response.status).toBe(404);
-      expect(((await response.json()) as { error: string }).error).toContain('LOOSELEAF_MIRROR');
+    const client = await mcpClient(server);
+    for (const name of ['list_notebooks', 'search_notes', 'read_page', 'list_pages']) {
+      const args = name === 'search_notes' ? { query: 'x' } : name === 'read_page' ? { page_id: 'x' } : name === 'list_pages' ? { section_id: 'x' } : {};
+      const read = await call(client, name, args);
+      expect(read.isError, name).toBe(true);
+      expect(read.text).toContain('LOOSELEAF_MIRROR');
     }
+    expect(await call(client, 'list_boards')).toEqual({ text: 'There are no boards yet. Make one on a notebook with create_board.', isError: false });
   });
 
   it('allows the MCP headers in a CORS preflight', async () => {

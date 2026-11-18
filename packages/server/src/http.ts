@@ -23,6 +23,7 @@ import { bearerToken, tokenMatches } from './access-token.js';
 import { BlobHashMismatchError, BlobTooLargeError, type DiskStore } from './disk-store.js';
 import { isNotFound } from './doc-log.js';
 import { answerMcp, MCP_PATH } from './mcp.js';
+import type { Boards } from './boards.js';
 import type { MirrorView } from './mirror.js';
 import type { NotesWriter } from './notes-writer.js';
 
@@ -33,10 +34,12 @@ export interface HttpOptions {
   maxBlobBytes: number;
   /** A folder holding the built web client with an index.html, or null to serve a plain-text notice. */
   webDir: string | null;
-  /** The running mirror the MCP endpoint reads, or null when the mirror is off and /mcp answers 404. */
+  /** The running mirror the MCP notes read tools read, or null when the mirror is off. */
   mirror: MirrorView | null;
-  /** What the MCP endpoint's write tools change the docs through. */
+  /** What the MCP endpoint's notes write tools change the docs through. */
   writer: NotesWriter;
+  /** What the MCP endpoint's board tools read and change the boards through. */
+  boards: Boards;
   /** Called with a blob's hash after an upload stores a blob that was not stored before. It must not throw or block. */
   onBlobStored?: (hash: string) => void;
 }
@@ -157,9 +160,6 @@ async function handleBlobs(
 }
 
 async function handleMcp(options: HttpOptions, req: IncomingMessage, res: ServerResponse, method: string): Promise<void> {
-  if (options.mirror === null) {
-    return sendJson(res, 404, { error: 'the MCP endpoint needs the mirror, which is off; set LOOSELEAF_MIRROR=on (or leave it unset) and restart' });
-  }
   if (method !== 'POST') {
     // No SSE stream and no sessions, so GET and DELETE have nothing to do.
     res.setHeader('Allow', 'POST');
@@ -169,7 +169,8 @@ async function handleMcp(options: HttpOptions, req: IncomingMessage, res: Server
   if (token === null || !tokenMatches(token, options.token)) {
     return sendJson(res, 401, { error: 'missing or wrong access token' });
   }
-  const reply = await answerMcp(req, { mirror: options.mirror, writer: options.writer }, options.version);
+  const context = { mirror: options.mirror, writer: options.writer, boards: options.boards, baseUrl: callerBaseUrl(req) };
+  const reply = await answerMcp(req, context, options.version);
   for (const [name, value] of Object.entries(reply.headers ?? {})) res.setHeader(name, value);
   if (reply.body === null) {
     res.writeHead(reply.status);
@@ -263,6 +264,15 @@ function allowAnyOrigin(req: IncomingMessage, res: ServerResponse): void {
   if (req.headers['access-control-request-private-network'] === 'true') {
     res.setHeader('Access-Control-Allow-Private-Network', 'true');
   }
+}
+
+/** The server's address as the caller reached it, for page addresses in the board tools' answers; '' without a Host header. */
+function callerBaseUrl(req: IncomingMessage): string {
+  const host = req.headers.host;
+  if (host === undefined || !/^[A-Za-z0-9.:[\]-]+$/.test(host)) return '';
+  // `tailscale serve` and other HTTPS proxies say so in X-Forwarded-Proto.
+  const proto = req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+  return `${proto}://${host}`;
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {

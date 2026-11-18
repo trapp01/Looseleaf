@@ -1,9 +1,12 @@
 /**
  * The server process: reads its settings from the environment (listed in
  * packages/server/README.md), starts the server and stops it cleanly on
- * SIGTERM or SIGINT.
+ * SIGTERM or SIGINT. Run as `server.js import-corkboard …` it runs that
+ * command instead, with the server stopped.
  */
 import { resolve } from 'node:path';
+import { ImportRefusal, importCorkboard, parseImportArgs } from './corkboard-import-command.js';
+import { unfinishedImport } from './corkboard-import-marker.js';
 import { DEFAULT_MAX_BLOB_BYTES, DEFAULT_PORT, SERVER_VERSION, startServer } from './server.js';
 import { DEFAULT_SNAPSHOT_KEEP } from './snapshots.js';
 
@@ -25,7 +28,29 @@ function switchFromEnv(name: string, fallback: boolean): boolean {
   throw new Error(`${name} must be "on" or "off", got "${raw}"`);
 }
 
+async function runImport(args: string[]): Promise<void> {
+  let options;
+  try {
+    options = parseImportArgs(args, process.env);
+    const outcome = await importCorkboard(options);
+    process.stdout.write(outcome.text);
+    if (outcome.reportError === null) console.log(`Report saved to ${outcome.reportPath}`);
+    else console.error(`The report printed above could not be saved to ${outcome.reportPath}: ${outcome.reportError}`);
+    if (!outcome.ok) process.exitCode = 1;
+  } catch (error) {
+    if (!(error instanceof ImportRefusal)) {
+      // A failure after the first write leaves the marker that says so; repeat its advice here.
+      const unfinished = options === undefined ? null : await unfinishedImport(options.dataDir).catch(() => null);
+      throw unfinished === null ? error : new Error(`${(error as Error).message}\n${unfinished}`);
+    }
+    console.error(`Nothing was imported. ${error.message}`);
+    process.exitCode = 2;
+  }
+}
+
 async function main(): Promise<void> {
+  const [command, ...args] = process.argv.slice(2);
+  if (command === 'import-corkboard') return runImport(args);
   const dataDir = resolve(process.env.LOOSELEAF_DATA ?? './data');
   const server = await startServer({
     dataDir,

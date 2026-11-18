@@ -1,6 +1,6 @@
 /**
  * Starts the whole server on one port: HTTP routes, the /sync WebSocket, the
- * daily snapshots and the mirror, over one data folder. `main.ts` calls this with the
+ * daily snapshots, the mirror and the board repairs, over one data folder. `main.ts` calls this with the
  * environment's settings; tests call it directly.
  */
 import { createServer } from 'node:http';
@@ -10,6 +10,8 @@ import type { Duplex } from 'node:stream';
 import { WebSocketServer } from 'ws';
 import { SYNC_PATH } from '@looseleaf/sync';
 import { loadOrCreateToken } from './access-token.js';
+import { Boards } from './boards.js';
+import { unfinishedImport } from './corkboard-import-marker.js';
 import { DiskStore } from './disk-store.js';
 import { createHttpHandler } from './http.js';
 import { Hub } from './hub.js';
@@ -54,22 +56,30 @@ export interface RunningServer {
   store: DiskStore;
   /** Null when the mirror is off. */
   mirror: MirrorView | null;
+  boards: Boards;
   /** Stops accepting work, closes every socket, waits for pending writes, snapshots and a mirror plan in progress. */
   close(): Promise<void>;
 }
 
 export const SERVER_VERSION: string = packageJson.version;
 
+/** Throws, before touching the data folder, when it holds a Corkboard import that did not finish cleanly. */
 export async function startServer(options: ServerOptions): Promise<RunningServer> {
+  const unfinished = await unfinishedImport(options.dataDir);
+  if (unfinished !== null) throw new Error(unfinished);
   const store = new DiskStore(options.dataDir);
   await store.init();
   const access = await loadOrCreateToken(options.dataDir, options.token);
   const webDir = await usableWebDir(options.webDir ?? null);
   const mirror = options.mirror === false ? null : new Mirror(store, { delayMs: options.mirrorDelayMs });
-  const hub = new Hub(store, access.token, {
+  const hub: Hub = new Hub(store, access.token, {
     docCacheSize: options.docCacheSize,
-    onDocStored: mirror === null ? undefined : (docId) => mirror.docStored(docId),
+    onDocStored: (docId) => {
+      mirror?.docStored(docId);
+      boards.docStored(docId);
+    },
   });
+  const boards = new Boards(hub, store);
   const http = createServer(
     createHttpHandler({
       store,
@@ -79,6 +89,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
       webDir,
       mirror,
       writer: new NotesWriter(hub),
+      boards,
       onBlobStored: mirror === null ? undefined : (hash) => mirror.blobStored(hash),
     }),
   );
@@ -103,11 +114,13 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   if (address === null || typeof address === 'string') throw new Error('The HTTP server has no TCP address');
   const stopSnapshots = startSnapshots(store, options.snapshotKeep ?? DEFAULT_SNAPSHOT_KEEP);
   mirror?.start();
+  boards.start();
 
   let closing: Promise<void> | null = null;
   const close = () => {
     closing ??= (async () => {
       const httpClosed = new Promise<void>((resolve) => http.close(() => resolve()));
+      await boards.close();
       await hub.close();
       sockets.close();
       http.closeAllConnections();
@@ -129,6 +142,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
     hub,
     store,
     mirror,
+    boards,
     close,
   };
 }

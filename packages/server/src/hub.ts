@@ -14,6 +14,8 @@ import * as Y from 'yjs';
 import {
   CLOSE_BAD_TOKEN,
   CLOSE_PROTOCOL_ERROR,
+  CONTENT_VERSION,
+  contentRefusal,
   decodeFrame,
   decodeHello,
   encodeFrame,
@@ -176,6 +178,12 @@ export class Hub {
     if (hello.v !== PROTOCOL_VERSION) {
       const reason = `protocol version ${hello.v} is not supported; this server speaks ${PROTOCOL_VERSION}`;
       this.refuse(connection, CLOSE_PROTOCOL_ERROR, reason);
+      return;
+    }
+    const tooOld = contentRefusal(hello);
+    if (tooOld !== null) {
+      console.warn(`Refused a sync connection from ${connection.remote}: content version ${hello.content ?? 'none'} is below ${CONTENT_VERSION}`);
+      this.refuse(connection, tooOld.code, tooOld.reason);
       return;
     }
     if (!tokenMatches(hello.token, this.token)) {

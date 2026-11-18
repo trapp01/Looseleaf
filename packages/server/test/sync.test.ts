@@ -1,7 +1,12 @@
 import { rm } from 'node:fs/promises';
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
+import WebSocket from 'ws';
 import {
+  CLIENT_TOO_OLD_REASON,
+  CLOSE_CLIENT_TOO_OLD,
+  CLOSE_PROTOCOL_ERROR,
+  CONTENT_VERSION,
   decodeFrame,
   FrameType,
   HANDSHAKE_CONCURRENCY,
@@ -285,6 +290,42 @@ describe('access token', () => {
     expect(a.client.status.lastError).toBeNull();
     await waitForConvergence(server, [a.store], ['pg:secret']);
     await waitFor(async () => (await server.current.store.listBlobs()).length === 1, 'blob uploaded');
+  });
+});
+
+describe('content version', () => {
+  /** Sends a hello and resolves with the close code and reason, and whether any frame came back first. */
+  async function helloAndClose(server: TestServer, hello: object): Promise<{ code: number; reason: string; answered: boolean }> {
+    const socket = new WebSocket(server.url.replace('http', 'ws') + '/sync');
+    let answered = false;
+    socket.on('message', () => {
+      answered = true;
+    });
+    await new Promise((resolve) => socket.once('open', resolve));
+    socket.send(JSON.stringify(hello));
+    return new Promise((resolve) => {
+      socket.once('close', (code, reason) => resolve({ code, reason: reason.toString(), answered }));
+    });
+  }
+
+  it('refuses an app older than the server before any doc is exchanged, with a code each build understands', async () => {
+    const server = await TestServer.start();
+    const a = await connectedClient(server);
+    await editDoc(a.client, 'pg:shared', (doc) => doc.getText('t').insert(0, 'on the server'));
+    await waitForConvergence(server, [a.store], ['pg:shared']);
+
+    // Builds that send no content version.
+    const field = await helloAndClose(server, { t: 'hello', token: TOKEN, replica: 'old', v: 1 });
+    expect(field).toEqual({ code: CLOSE_PROTOCOL_ERROR, reason: CLIENT_TOO_OLD_REASON, answered: false });
+    const versioned = await helloAndClose(server, { t: 'hello', token: TOKEN, replica: 'old', v: 1, content: CONTENT_VERSION - 1 });
+    expect(versioned).toEqual({ code: CLOSE_CLIENT_TOO_OLD, reason: CLIENT_TOO_OLD_REASON, answered: false });
+    // A newer app than the server syncs.
+    const newer = new WebSocket(server.url.replace('http', 'ws') + '/sync');
+    await new Promise((resolve) => newer.once('open', resolve));
+    newer.send(JSON.stringify({ t: 'hello', token: TOKEN, replica: 'new', v: 1, content: CONTENT_VERSION + 1 }));
+    const welcome = await new Promise<string>((resolve) => newer.once('message', (data) => resolve(String(data))));
+    expect(JSON.parse(welcome).docs).toContain('pg:shared');
+    newer.terminate();
   });
 });
 
