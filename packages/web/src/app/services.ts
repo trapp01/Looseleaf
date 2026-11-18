@@ -14,11 +14,17 @@ import {
   extractPageText,
   getNode,
   LIBRARY_DOC_ID,
+  listTodoLines,
   pageDocId,
+  putOnBoard,
   readTree,
+  cardPageIds,
   listNotebooks,
+  type DocAccess,
 } from '@looseleaf/model';
 import { CommandTable, type AppActions } from '../commands/command-table.js';
+import { replicaDocAccess } from '../board/doc-access.js';
+import { liveCard, LiveBoard } from '../board/live-board.js';
 import { BlobUrlCache, retryMissingOnSync } from '../canvas/blob-urls.js';
 import { pickFiles } from '../canvas/files.js';
 import { placeFiles } from '../canvas/insert.js';
@@ -28,8 +34,11 @@ import { startMirror, type MirrorRunner } from '../mirror/mirror-runner.js';
 import { NotebookDocs } from '../nav/notebook-docs.js';
 import { RecentPages } from '../nav/recent.js';
 import { SearchIndex, type SearchablePage } from '../search/search-index.js';
+import type { TodoLineIndex } from '../search/todo-line-index.js';
+import { readLocal, writeLocal } from './local-settings.js';
 import { allSections, SelectionStore } from './selection.js';
 import { Store } from './store.js';
+import { Toasts } from './toasts.js';
 import { createUiState, nextZoom, patchUi, type UiState } from './ui-state.js';
 
 export interface Services {
@@ -43,6 +52,15 @@ export interface Services {
   page: Store<PageSession | null>;
   blobs: BlobUrlCache;
   search: SearchIndex;
+  /** Every page's To Do lines, kept by the search pass; the same object as `search.lines`. */
+  todoLines: TodoLineIndex;
+  /** The selected notebook's board. */
+  boards: LiveBoard;
+  /** The model's cross-doc access over this replica, for adding and labelling cards. */
+  access: DocAccess;
+  /** The name recorded on this device's board changes (the actor). */
+  actor: Store<string>;
+  toasts: Toasts;
   recent: RecentPages;
   commands: CommandTable;
   /** The mirror kept in the folder chosen in the desktop app; null outside it. */
@@ -59,29 +77,50 @@ export function useServices(): Services {
 
 export const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
+/** A store whose value is read from and written back to localStorage under `key`. */
+function localStore<T>(key: string, fallback: T): Store<T> {
+  const store = new Store<T>(readLocal(key, fallback));
+  store.subscribe(() => writeLocal(key, store.get()));
+  return store;
+}
+
+const NO_PAGES: ReadonlySet<string> = new Set();
+
 export async function createServices(client: SyncClient): Promise<Services> {
   const library = await client.openDoc(LIBRARY_DOC_ID);
   const notebooks = new NotebookDocs(client, library);
+  const selection = new SelectionStore();
+  let boards: LiveBoard | null = null;
+  const search = new SearchIndex({
+    listPages: () => searchablePages(notebooks),
+    firstPages: () => {
+      const current = boards?.current.get();
+      return current ? cardPageIds(current.board) : NO_PAGES;
+    },
+    readPage: async (pageId) => {
+      const doc = await client.openDoc(pageDocId(pageId));
+      try {
+        return { text: extractPageText(doc), lines: listTodoLines(doc) };
+      } finally {
+        client.releaseDoc(pageDocId(pageId));
+      }
+    },
+  });
   const services: Services = {
     client,
     library,
     notebooks,
-    selection: new SelectionStore(),
+    selection,
     ui: createUiState(),
     activeEditor: new Store<Editor | null>(null),
     page: new Store<PageSession | null>(null),
     blobs: new BlobUrlCache({ getBlob: (hash) => client.getBlob(hash) }),
-    search: new SearchIndex({
-      listPages: () => searchablePages(notebooks),
-      pageText: async (pageId) => {
-        const doc = await client.openDoc(pageDocId(pageId));
-        try {
-          return extractPageText(doc);
-        } finally {
-          client.releaseDoc(pageDocId(pageId));
-        }
-      },
-    }),
+    search,
+    todoLines: search.lines,
+    boards: (boards = new LiveBoard(client, selection, notebooks)),
+    access: replicaDocAccess(client),
+    actor: localStore('actor', ''),
+    toasts: new Toasts(),
     recent: new RecentPages(),
     commands: null as unknown as CommandTable,
     mirror: startMirror(client),
@@ -91,9 +130,22 @@ export async function createServices(client: SyncClient): Promise<Services> {
   return services;
 }
 
+/** The open page shows in the notebook view and, for a card, beside the board; never under Deleted notes. */
+function pageShowing(services: Services): boolean {
+  return services.page.get() !== null && services.ui.get().view !== 'deleted';
+}
+
 function liveEditor(services: Services): Editor | null {
   const editor = services.activeEditor.get();
-  return editor && !editor.isDestroyed && services.ui.get().view === 'page' ? editor : null;
+  return editor && !editor.isDestroyed && pageShowing(services) ? editor : null;
+}
+
+/** The open page when it can go on its notebook's board: the notebook has one and the page is not a card on it. */
+function pageForBoard(s: Services): string | null {
+  const session = s.page.get();
+  const current = s.boards.current.get();
+  if (!session || !pageShowing(s) || !current || session.notebookId !== current.notebookId) return null;
+  return liveCard(current.board, session.pageId) ? null : session.pageId;
 }
 
 /** Every page of every live notebook that is open, with the notebook and section it sits in. */
@@ -141,7 +193,16 @@ export function appActions(s: Services): AppActions {
   };
 
   return {
-    hasPage: () => s.page.get() !== null && s.ui.get().view === 'page',
+    hasPage: () => pageShowing(s),
+    canPutOnBoard: () => pageForBoard(s) !== null,
+    putOnBoard: () => {
+      const pageId = pageForBoard(s);
+      const current = s.boards.current.get();
+      if (pageId && current) putOnBoard(current.doc, pageId, { by: s.actor.get() });
+    },
+    canShowBoardBeside: () => s.ui.get().view === 'page' && s.boards.current.get()?.notebookId === s.selection.get().notebookId,
+    boardBesideOpen: () => s.ui.get().boardBeside,
+    toggleBoardBeside: () => ui({ boardBeside: !s.ui.get().boardBeside }),
     newPage: () => {
       const doc = notebookDoc();
       if (!doc) return void ui({ dialog: { kind: 'new-notebook' } });

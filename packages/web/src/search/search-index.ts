@@ -3,9 +3,13 @@
  * the background one page at a time in idle time, re-reads a page whose
  * modified time changed, drops pages that are gone, and takes fresh text for
  * the open page directly. Queries run synchronously over the held text, so
- * they never wait on storage and never block typing for long.
+ * they never wait on storage and never block typing for long. The same pass
+ * keeps the To Do line index (todo-line-index.ts) filled.
  */
+import { useCallback, useSyncExternalStore } from 'react';
+import type { TodoLine } from '@looseleaf/model';
 import { Store } from '../app/store.js';
+import { TodoLineIndex } from './todo-line-index.js';
 
 export interface SearchablePage {
   pageId: string;
@@ -18,8 +22,10 @@ export interface SearchablePage {
 export interface SearchSource {
   /** Every live page in every notebook. */
   listPages(): SearchablePage[];
-  /** The page's words, as `extractPageText` gives them. */
-  pageText(pageId: string): Promise<string>;
+  /** The page's words, as `extractPageText` gives them, and its To Do lines, as `listTodoLines` gives them. */
+  readPage(pageId: string): Promise<{ text: string; lines: TodoLine[] }>;
+  /** Pages to read before the rest, asked again before each read: the open board's cards, whose fronts show their text and lines. */
+  firstPages?(): ReadonlySet<string>;
 }
 
 export type SearchScope =
@@ -65,13 +71,17 @@ export class SearchIndex {
   private readonly texts = new Map<string, Indexed>();
   private pages: SearchablePage[] = [];
   private running = false;
+  private firstPassDone = false;
   private again = false;
   /** Pages indexed and pages known, for a progress note in the search pane. */
   readonly progress = new Store<{ indexed: number; total: number }>({ indexed: 0, total: 0 });
+  /** Bumped whenever a page's held text changes. */
+  readonly version = new Store(0);
 
   constructor(
     private readonly source: SearchSource,
     private readonly wait: IdleWait = idleWait,
+    readonly lines: TodoLineIndex = new TodoLineIndex(),
   ) {}
 
   /** Re-reads the page list and indexes whatever is new or changed, in the background. Resolves when caught up. */
@@ -93,7 +103,28 @@ export class SearchIndex {
 
   /** Takes the open page's current text without waiting for the background pass. */
   setPageText(pageId: string, text: string, modifiedAt: number): void {
+    this.hold(pageId, text, modifiedAt);
+  }
+
+  /** The page's text as last read, or '' when it has not been read yet. */
+  textOf(pageId: string): string {
+    return this.texts.get(pageId)?.text ?? '';
+  }
+
+  /**
+   * True once the page's text has been read, or once the first background
+   * pass has finished, so '' from `textOf` means an empty page rather than
+   * one still waiting to be read on first load. A page made since then is new
+   * and empty until it is read.
+   */
+  hasRead(pageId: string): boolean {
+    return this.firstPassDone || this.texts.has(pageId);
+  }
+
+  private hold(pageId: string, text: string, modifiedAt: number): void {
+    const changed = this.texts.get(pageId)?.text !== text;
     this.texts.set(pageId, { modifiedAt, text, lower: text.toLowerCase() });
+    if (changed) this.version.update((n) => n + 1);
   }
 
   search(query: string, scope: SearchScope): SearchHit[] {
@@ -121,20 +152,29 @@ export class SearchIndex {
     this.pages = this.source.listPages();
     const live = new Set(this.pages.map((p) => p.pageId));
     for (const id of this.texts.keys()) if (!live.has(id)) this.texts.delete(id);
+    this.lines.keepOnly(live);
     const stale = this.pages.filter((p) => this.texts.get(p.pageId)?.modifiedAt !== p.modifiedAt);
     this.report();
-    for (const page of stale) {
+    while (stale.length > 0) {
       await this.wait();
+      const first = this.source.firstPages?.();
+      const at = first && first.size > 0 ? Math.max(0, stale.findIndex((p) => first.has(p.pageId))) : 0;
+      const page = stale.splice(at, 1)[0]!;
       const known = this.texts.get(page.pageId);
       if (known && known.modifiedAt === page.modifiedAt) continue;
       try {
-        const text = await this.source.pageText(page.pageId);
-        this.texts.set(page.pageId, { modifiedAt: page.modifiedAt, text, lower: text.toLowerCase() });
+        const { text, lines } = await this.source.readPage(page.pageId);
+        this.hold(page.pageId, text, page.modifiedAt);
+        this.lines.set(page.pageId, page.notebookId, lines);
       } catch (error) {
         console.warn(`Search could not read page ${page.pageId}`, error);
-        this.texts.set(page.pageId, { modifiedAt: page.modifiedAt, text: '', lower: '' });
+        this.hold(page.pageId, '', page.modifiedAt);
       }
       this.report();
+    }
+    if (!this.firstPassDone) {
+      this.firstPassDone = true;
+      this.version.update((n) => n + 1);
     }
   }
 
@@ -197,4 +237,10 @@ export function groupHits(hits: SearchHit[]): HitGroup[] {
     group.hits.push(hit);
   }
   return [...groups.values()];
+}
+
+/** The page's text as search holds it, or null while it waits to be read on first load (see `hasRead`), re-rendering when either changes. */
+export function usePageText(search: SearchIndex, pageId: string): string | null {
+  const read = useCallback(() => (search.hasRead(pageId) ? search.textOf(pageId) : null), [search, pageId]);
+  return useSyncExternalStore(search.version.subscribe, read, read);
 }

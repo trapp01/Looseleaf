@@ -1,5 +1,6 @@
-/** The Home tab: clipboard, font, paragraph, styles and tags, laid out as in OneNote. */
+/** The Home tab: clipboard, font, paragraph, styles and tags, laid out as in OneNote, then the board. */
 import {
+  BoardRegular,
   BookOpenFilled,
   CheckboxCheckedRegular,
   ClipboardPasteRegular,
@@ -30,6 +31,7 @@ import {
 } from '@fluentui/react-icons';
 import type { ReactNode } from 'react';
 import { useServices } from '../app/services.js';
+import { useCurrentBoard } from '../board/live-board.js';
 import { currentStyle, type CommandId } from '../commands/command-table.js';
 import { useEditorState } from './Ribbon.js';
 import { DEFAULT_FONT, DEFAULT_FONT_SIZE, FONT_SIZES, FONTS } from './fonts.js';
@@ -187,7 +189,18 @@ export function HomeTab() {
       <Group label="Voice">
         <Unavailable icon={<MicRegular />} label="Dictate" large />
       </Group>
+      <BoardGroup />
     </div>
+  );
+}
+
+/** "Put on board" for the open page; it re-renders as the board changes, so it disables once the page is a card. */
+function BoardGroup() {
+  useCurrentBoard();
+  return (
+    <Group label="Board">
+      <Cmd id="put-on-board" icon={<BoardRegular />} large />
+    </Group>
   );
 }
 

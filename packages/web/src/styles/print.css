@@ -12,6 +12,9 @@
   .app,
   .workspace,
   .main-area,
+  .board-screen,
+  .card-pane,
+  .page-frame,
   .phone-pane,
   .phone-main {
     display: block !important;
@@ -34,7 +37,12 @@
   .container-resize,
   .dialog-backdrop,
   .context-menu,
-  .popover {
+  .popover,
+  .board-main,
+  .card-pane-bar,
+  .card-strip,
+  .activity-panel,
+  .toaster {
     display: none !important;
   }
 

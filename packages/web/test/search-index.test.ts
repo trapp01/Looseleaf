@@ -7,9 +7,9 @@ function source(pages: SearchablePage[], texts: Record<string, string>) {
     pages,
     texts,
     listPages: () => src.pages,
-    pageText: async (id: string) => {
+    readPage: async (id: string) => {
       src.reads.push(id);
-      return src.texts[id] ?? '';
+      return { text: src.texts[id] ?? '', lines: [] };
     },
   };
   return src;

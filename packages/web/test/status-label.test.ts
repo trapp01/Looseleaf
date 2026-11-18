@@ -25,6 +25,15 @@ describe('describeStatus', () => {
     expect(describeStatus({ ...base, state: 'offline', lastError: { kind: 'bad-token', message: 'x', at: 0 } }).label).toBe('Wrong access token');
   });
 
+  it('tells an app older than the server to update, while offline and between retries', () => {
+    const outdated = { kind: 'outdated' as const, message: 'x', at: 0 };
+    for (const state of ['offline', 'connecting'] as const) {
+      const label = describeStatus({ ...base, state, lastError: outdated });
+      expect(label.label).toBe('Update needed');
+      expect(label.detail).toMatch(/^This app is older than the server\. Reload the page or restart the app to update\./);
+    }
+  });
+
   it('describes the last synced time', () => {
     const now = new Date(2026, 10, 15, 12, 0).getTime();
     expect(describeTime(null, now)).toBe('Never');

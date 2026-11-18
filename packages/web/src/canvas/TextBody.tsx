@@ -13,6 +13,9 @@ import { DOMSerializer } from '@tiptap/pm/model';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { deleteContainer, richTextSchema } from '@looseleaf/model';
 import { useServices } from '../app/services.js';
+import { cardLinkSource, drawCardLink, type CardLinkSource } from '../board/card-link-view.js';
+import { inboxPill, type InboxPills } from '../board/inbox-pill.js';
+import { showLineMenu } from '../board/line-menu.js';
 import type { BlobUrlCache } from './blob-urls.js';
 import { placeFiles } from './insert.js';
 import { stripUnsafeLinks } from './links.js';
@@ -39,7 +42,10 @@ export function TextBody({
   created?: { entry: unknown };
   onCreatedFocused: () => void;
 }) {
-  const { blobs } = useServices();
+  const services = useServices();
+  const { blobs } = services;
+  const cardLinks = useMemo(() => cardLinkSource(services), [services]);
+  const inbox = useMemo(() => inboxPills(services, session), [services, session]);
   const body = map.get('body');
   const fragment = body instanceof Y.XmlFragment ? body : null;
   const [live, setLive] = useState(!!created);
@@ -78,6 +84,8 @@ export function TextBody({
         <StaticBody
           fragment={fragment}
           blobs={blobs}
+          cardLinks={cardLinks}
+          inbox={inbox}
           onPress={(x, y) => {
             click.current = { x, y };
             setLive(true);
@@ -114,6 +122,8 @@ function LiveEditor({
       commands: services.commands,
       putBlob: (bytes) => services.client.putBlob(bytes),
       addFiles: (files) => void placeFiles(services, session, files, {}),
+      cardLinks: cardLinkSource(services),
+      inbox: inboxPills(services, session),
     }),
     [services, session],
   );
@@ -159,10 +169,46 @@ function LiveEditor({
   return <EditorContent editor={editor} />;
 }
 
-function StaticBody({ fragment, blobs, onPress }: { fragment: Y.XmlFragment; blobs: BlobUrlCache; onPress: (x: number, y: number) => void }) {
+/** The open page's Inbox lines and the line menu they open. */
+function inboxPills(services: ReturnType<typeof useServices>, session: PageSession): InboxPills {
+  return {
+    lines: session.inbox,
+    openMenu: (lineId, x, y) => {
+      const current = services.boards.current.get();
+      if (current) showLineMenu(services, current.board, { notebookId: session.notebookId, pageId: session.pageId, lineId }, x, y);
+    },
+  };
+}
+
+function StaticBody({
+  fragment,
+  blobs,
+  cardLinks,
+  inbox,
+  onPress,
+}: {
+  fragment: Y.XmlFragment;
+  blobs: BlobUrlCache;
+  cardLinks: CardLinkSource;
+  inbox: InboxPills;
+  onPress: (x: number, y: number) => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     let pictures: Array<{ img: HTMLImageElement; hash: string }> = [];
+    let links: HTMLElement[] = [];
+    const drawLinks = () => {
+      for (const link of links) drawCardLink(link, cardLinks.read(link.dataset.cardLink ?? ''));
+    };
+    let lines: HTMLElement[] = [];
+    const drawPills = () => {
+      const ids = inbox.lines.get();
+      for (const line of lines) {
+        line.querySelector(':scope > .inbox-pill')?.remove();
+        const lineId = line.dataset.lineId ?? '';
+        if (ids.has(lineId)) line.append(inboxPill(lineId, inbox));
+      }
+    };
     const show = () => {
       for (const { img, hash } of pictures) {
         const state = blobs.state(hash);
@@ -190,6 +236,10 @@ function StaticBody({ fragment, blobs, onPress }: { fragment: Y.XmlFragment; blo
           next.push({ img, hash: img.dataset.blob! });
         }
         stripUnsafeLinks(dom);
+        links = [...dom.querySelectorAll<HTMLElement>('span[data-card-link]')];
+        drawLinks();
+        lines = [...dom.querySelectorAll<HTMLElement>('[data-tag="todo"][data-line-id]')];
+        drawPills();
         // Acquire the new pictures before releasing the old, so an unchanged picture keeps its URL.
         for (const p of pictures) blobs.release(p.hash);
         pictures = next;
@@ -201,13 +251,18 @@ function StaticBody({ fragment, blobs, onPress }: { fragment: Y.XmlFragment; blo
     };
     render();
     const unsubscribe = blobs.subscribe(show);
+    // Only bodies holding card links follow the board, so a page of plain notes never redraws for it.
+    const stopLinks = cardLinks.subscribe(() => links.length > 0 && drawLinks());
+    const stopPills = inbox.lines.subscribe(() => lines.length > 0 && drawPills());
     fragment.observeDeep(render);
     return () => {
       fragment.unobserveDeep(render);
       unsubscribe();
+      stopLinks();
+      stopPills();
       for (const p of pictures) blobs.release(p.hash);
     };
-  }, [fragment, blobs]);
+  }, [fragment, blobs, cardLinks, inbox]);
   return (
     <div
       ref={ref}

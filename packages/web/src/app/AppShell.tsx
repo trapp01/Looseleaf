@@ -1,6 +1,8 @@
 /**
  * The app once first run is done: the desktop layout (title bar, ribbon,
- * rail, sections, pages, canvas) or the phone drill-down, plus the dialogs.
+ * rail, sections, then pages and canvas, with the board beside the page when
+ * chosen, or the notebook's board) or the phone drill-down, plus the dialogs
+ * and notices.
  * It also wires the things that span the app: keeping the selection valid
  * against the live tree, keyboard shortcuts and native menu commands through
  * the command table, recent pages, keeping the search index fresh, opening the
@@ -10,17 +12,20 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { shell } from '../shell-bridge.js';
 import { MENU_COMMANDS } from '../commands/command-table.js';
+import { BoardBeside, BoardScreen } from '../board/BoardScreen.js';
+import { useCurrentBoard } from '../board/live-board.js';
 import { PageView } from '../canvas/PageView.js';
 import { Dialogs } from './Dialogs.js';
 import { guardLeaving } from './leave-guard.js';
 import { useServices } from './services.js';
 import { useStore } from './store.js';
+import { Toaster } from './toasts.js';
 import { patchUi } from './ui-state.js';
 import { TitleBar } from './TitleBar.js';
 import { UpdateBar } from './UpdateBar.js';
 import { Ribbon } from '../ribbon/Ribbon.js';
 import { Rail } from '../nav/Rail.js';
-import { NavPanel } from '../nav/NavPanel.js';
+import { NavPanel, PaneDivider } from '../nav/NavPanel.js';
 import { DeletedNotes } from '../nav/DeletedNotes.js';
 import { EmptyLibrary, EmptySection } from '../nav/EmptyStates.js';
 import { useNotebooks, useNotebookTree } from '../nav/notebook-docs.js';
@@ -31,6 +36,8 @@ import { useSearchIndexing } from '../search/use-search-indexing.js';
 import { allSections } from './selection.js';
 
 const PHONE_QUERY = '(max-width: 767px)';
+const BOARD_BESIDE_MIN = 320;
+const BOARD_BESIDE_MAX = 1200;
 
 export function useIsPhone(): boolean {
   return useSyncExternalStore(
@@ -102,12 +109,30 @@ export function AppShell({ persistent }: { persistent: boolean }) {
     [commands],
   );
 
-  const view = useStore(ui).view;
+  const { view, boardBeside } = useStore(ui);
+  const board = useCurrentBoard();
   const hasSections = allSections(tree.children).length > 0;
   let main;
   if (view === 'deleted') main = <DeletedNotes onClose={() => patchUi(ui, { view: 'page' })} />;
+  else if (view === 'board' && board && board.notebookId === sel.notebookId) main = <BoardScreen current={board} />;
   else if (sel.pageId && doc) main = <PageView key={sel.pageId} notebookId={sel.notebookId!} pageId={sel.pageId} notebookDoc={doc} />;
   else main = <EmptySection hasSections={hasSections} />;
+  // The board beside the page needs the width of a desktop; a phone shows one pane at a time.
+  // The wrapper is there whether or not the board is, so opening it never remounts the page.
+  if (!phone && view === 'page') {
+    const beside = boardBeside && board && board.notebookId === sel.notebookId ? board : null;
+    main = (
+      <div className="page-and-board">
+        <div className="page-beside-board">{main}</div>
+        {beside && (
+          <>
+            <PaneDivider pane="board" side="right" min={BOARD_BESIDE_MIN} max={BOARD_BESIDE_MAX} />
+            <BoardBeside current={beside} />
+          </>
+        )}
+      </div>
+    );
+  }
 
   const body =
     notebookList.length === 0 ? (
@@ -138,6 +163,7 @@ export function AppShell({ persistent }: { persistent: boolean }) {
       {body}
       <Dialogs />
       <ContextMenuHost />
+      <Toaster toasts={services.toasts} />
     </div>
   );
 }

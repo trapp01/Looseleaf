@@ -4,6 +4,7 @@ import {
   AddRegular,
   ArrowDownloadRegular,
   ArrowImportRegular,
+  BoardRegular,
   CheckmarkRegular,
   ChevronDownRegular,
   DeleteRegular,
@@ -16,6 +17,7 @@ import { useServices } from '../app/services.js';
 import { useStore } from '../app/store.js';
 import { patchUi } from '../app/ui-state.js';
 import { useYValue } from '../app/yjs-hooks.js';
+import { useCurrentBoard } from '../board/live-board.js';
 import { useNotebooks } from './notebook-docs.js';
 import { RenameInput } from './RenameInput.js';
 
@@ -25,6 +27,8 @@ export function NotebookSwitcher() {
   const notebooks = useNotebooks(library);
   const current = useYValue(library, () => (sel.notebookId ? getNotebook(library, sel.notebookId) : null), sel.notebookId);
   const renaming = useStore(ui).renaming;
+  const board = useCurrentBoard();
+  const hasBoard = board !== null && board.notebookId === sel.notebookId;
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
   const close = () => setOpen(false);
@@ -86,6 +90,13 @@ export function NotebookSwitcher() {
                 <div className="menu-separator" />
                 <button className="menu-item" onClick={() => (close(), patchUi(ui, { renaming: current.id }))}>
                   <span className="menu-icon"><RenameRegular /></span>Rename notebook
+                </button>
+                <button
+                  className="menu-item"
+                  disabled={hasBoard}
+                  onClick={() => (close(), patchUi(ui, { dialog: { kind: 'new-board', notebookId: current.id } }))}
+                >
+                  <span className="menu-icon"><BoardRegular /></span>Add a board
                 </button>
                 <button
                   className="menu-item"

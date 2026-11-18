@@ -1,0 +1,40 @@
+/* Short notices at the bottom of the window, with an optional Undo (app/toasts.tsx). */
+.toaster {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transform: translateX(-50%);
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 40px;
+  padding: 6px 8px 6px 16px;
+  border-radius: 8px;
+  background: var(--fg);
+  color: var(--bg-surface);
+  box-shadow: var(--shadow-pop);
+}
+
+.toast-undo {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+@media (pointer: coarse) {
+  .toast-undo {
+    min-height: 44px;
+  }
+}

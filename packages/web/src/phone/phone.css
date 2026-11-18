@@ -100,6 +100,10 @@
   padding: 16px 16px 0;
 }
 
+.is-phone .page-title {
+  width: min(560px, calc(var(--view-width, 560px) - 32px));
+}
+
 .is-phone .deleted-notes {
   padding: 12px 16px 24px;
 }

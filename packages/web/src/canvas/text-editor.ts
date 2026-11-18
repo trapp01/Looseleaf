@@ -1,9 +1,10 @@
 /**
  * The TipTap extension list for one text container: the model's rich-text
  * extensions bound to the container's Y.XmlFragment, with the browser-only
- * parts the model cannot hold: pictures drawn from the blob URL cache, To Do
- * checkboxes that toggle on click, Tab indenting through the command table,
- * Cmd/Ctrl-click on links, and paste or drop of pictures and files.
+ * parts the model cannot hold: pictures drawn from the blob URL cache, card
+ * links drawn live from the board, the "Inbox" pill and menu on To Do lines,
+ * To Do checkboxes that toggle on click, Tab indenting through the command
+ * table, Cmd/Ctrl-click on links, and paste or drop of pictures and files.
  */
 import { Extension, type AnyExtension } from '@tiptap/core';
 import Collaboration from '@tiptap/extension-collaboration';
@@ -13,6 +14,8 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { yUndoPluginKey } from 'y-prosemirror';
 import type * as Y from 'yjs';
 import { richTextExtensions } from '@looseleaf/model';
+import { cardLinkWithView, type CardLinkSource } from '../board/card-link-view.js';
+import { inboxPillExtension, type InboxPills } from '../board/inbox-pill.js';
 import type { BlobUrlCache } from './blob-urls.js';
 import type { CommandTable } from '../commands/command-table.js';
 import { imageSize } from './files.js';
@@ -24,6 +27,10 @@ export interface TextEditorEnv {
   putBlob(bytes: Uint8Array): Promise<string>;
   /** Files that are not pictures, dropped or pasted into this container. */
   addFiles(files: File[]): void;
+  /** What card links show and open. */
+  cardLinks: CardLinkSource;
+  /** The page's lines in its board's Inbox and their menu; null shows no pills. */
+  inbox: InboxPills | null;
 }
 
 /** Widest a pasted picture starts inside text, in px. */
@@ -32,9 +39,12 @@ const MAX_INLINE_PICTURE_WIDTH = 480;
 const CHECKBOX_HIT_PX = 22;
 
 export function textEditorExtensions(fragment: Y.XmlFragment, env: TextEditorEnv): AnyExtension[] {
-  const base = richTextExtensions.map((ext) => (ext.name === 'image' ? pictureWithBlob(ext, env.blobs) : ext));
+  const base = richTextExtensions.map((ext) =>
+    ext.name === 'image' ? pictureWithBlob(ext, env.blobs) : ext.name === 'cardLink' ? cardLinkWithView(ext, env.cardLinks) : ext,
+  );
   return [
     ...base,
+    ...(env.inbox ? [inboxPillExtension(env.inbox)] : []),
     // Yjs history for the whole page lives in PageSession; the per-editor undo plugin is left out.
     Collaboration.extend({
       addProseMirrorPlugins() {

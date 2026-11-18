@@ -1,8 +1,9 @@
 /**
  * The phone layout (under 768 px): one pane at a time, drilling down from
- * sections to pages to the page. The page pane has a back arrow, the title, a
- * more-actions menu, the canvas, and the formatting bar docked above the
- * on-screen keyboard.
+ * sections to pages to the page, or from sections to the board to a page
+ * opened from it. The page pane has a back arrow, the title, a more-actions
+ * menu, the canvas, and the formatting bar docked above the on-screen
+ * keyboard.
  */
 import { useEffect, useRef, type ReactNode } from 'react';
 import { ArrowLeftRegular, HistoryRegular, MoreHorizontalRegular, SearchRegular, SettingsRegular } from '@fluentui/react-icons';
@@ -26,6 +27,9 @@ export function PhoneShell({ main }: { main: ReactNode }) {
   const sel = useStore(selection);
   const doc = useStore(notebooks.docs).get(sel.notebookId ?? '') ?? null;
   const title = useYValue(doc, () => (doc && sel.pageId ? (getNode(doc, sel.pageId)?.name ?? '') : ''), sel.pageId);
+  // A page opened from the board shows over it; back returns to the board.
+  const boardPage = state.view === 'board' ? state.boardPage : null;
+  const boardPageTitle = useYValue(doc, () => (doc && boardPage ? (getNode(doc, boardPage)?.name ?? '') : ''), boardPage);
   const go = (phonePane: typeof state.phonePane) => patchUi(ui, { phonePane });
   useKeyboardInset();
   const more = useRef<HTMLButtonElement>(null);
@@ -50,13 +54,14 @@ export function PhoneShell({ main }: { main: ReactNode }) {
         { label: 'Undo', disabled: !commands.isEnabled('undo'), onSelect: () => commands.run('undo') },
         { label: 'Redo', disabled: !commands.isEnabled('redo'), onSelect: () => commands.run('redo') },
         'separator',
-        { label: 'Export page…', disabled: !sel.pageId, onSelect: () => patchUi(ui, { dialog: { kind: 'export', scope: 'page' } }) },
+        { label: 'Put on board', disabled: !commands.isEnabled('put-on-board'), onSelect: () => commands.run('put-on-board') },
+        { label: 'Export page…', disabled: !sel.pageId || state.view !== 'page', onSelect: () => patchUi(ui, { dialog: { kind: 'export', scope: 'page' } }) },
         { label: 'Deleted notes', onSelect: () => commands.run('deleted-notes') },
         'separator',
         {
           label: 'Delete page',
           danger: true,
-          disabled: !doc || !sel.pageId,
+          disabled: !doc || !sel.pageId || state.view !== 'page',
           onSelect: () => {
             deleteNode(doc!, sel.pageId!);
             go('pages');
@@ -67,16 +72,28 @@ export function PhoneShell({ main }: { main: ReactNode }) {
     return (
       <div className="phone-pane phone-page">
         <header className="phone-header">
-          <button className="icon-button" aria-label="Back to pages" onClick={() => (patchUi(ui, { view: 'page' }), go('pages'))}>
-            <ArrowLeftRegular />
-          </button>
-          <span className="phone-title">{state.view === 'deleted' ? 'Deleted notes' : title || 'Untitled page'}</span>
+          {boardPage ? (
+            <button className="icon-button" aria-label="Back to board" onClick={() => patchUi(ui, { boardPage: null })}>
+              <ArrowLeftRegular />
+            </button>
+          ) : state.view === 'board' ? (
+            <button className="icon-button" aria-label="Back to sections" onClick={() => (patchUi(ui, { view: 'page', boardPage: null }), go('sections'))}>
+              <ArrowLeftRegular />
+            </button>
+          ) : (
+            <button className="icon-button" aria-label="Back to pages" onClick={() => (patchUi(ui, { view: 'page' }), go('pages'))}>
+              <ArrowLeftRegular />
+            </button>
+          )}
+          <span className="phone-title">
+            {state.view === 'deleted' ? 'Deleted notes' : boardPage ? boardPageTitle || 'Untitled page' : state.view === 'board' ? 'Board' : title || 'Untitled page'}
+          </span>
           <button ref={more} className="icon-button" aria-label="More actions" onClick={openMore}>
             <MoreHorizontalRegular />
           </button>
         </header>
         <div className="phone-main">{main}</div>
-        {state.view === 'page' && sel.pageId && <FormatBar />}
+        {((state.view === 'page' && sel.pageId) || boardPage) && <FormatBar />}
       </div>
     );
   }
@@ -99,7 +116,7 @@ export function PhoneShell({ main }: { main: ReactNode }) {
           <RecentPanel />
         </>
       ) : (
-        <SectionsPane onOpenSection={() => go('pages')} />
+        <SectionsPane onOpenSection={() => go('pages')} onOpenBoard={() => go('page')} />
       )}
     </div>
   );

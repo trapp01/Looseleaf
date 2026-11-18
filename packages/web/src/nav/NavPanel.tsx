@@ -1,4 +1,8 @@
-/** The navigation area beside the rail: sections and pages, or the search or recent pages panel, with draggable dividers. */
+/**
+ * The navigation area beside the rail: sections and pages, or the search or
+ * recent pages panel, with draggable dividers. The board view keeps the
+ * sections and takes the pages pane's place.
+ */
 import { useRef } from 'react';
 import { useServices } from '../app/services.js';
 import { useStore } from '../app/store.js';
@@ -19,7 +23,7 @@ export function NavPanel() {
     return (
       <div className="nav-panel" style={{ width: sections + pages }}>
         {state.railPanel === 'search' ? <SearchPanel /> : <RecentPanel />}
-        <Divider pane="pages" />
+        <PaneDivider pane="pages" />
       </div>
     );
   }
@@ -28,16 +32,35 @@ export function NavPanel() {
       <div className="nav-pane" style={{ width: sections }}>
         <SectionsPane />
       </div>
-      <Divider pane="sections" />
-      <div className="nav-pane" style={{ width: pages }}>
-        <PagesPane />
-      </div>
-      <Divider pane="pages" />
+      <PaneDivider pane="sections" />
+      {state.view !== 'board' && (
+        <>
+          <div className="nav-pane" style={{ width: pages }}>
+            <PagesPane />
+          </div>
+          <PaneDivider pane="pages" />
+        </>
+      )}
     </>
   );
 }
 
-function Divider({ pane }: { pane: keyof UiState['paneWidths'] }) {
+/**
+ * A draggable divider that sets `pane`'s width, kept per device. A pane to
+ * the divider's left grows as it moves right; one to its right (`side:
+ * 'right'`) grows as it moves left. A drag starts from the pane's shown width.
+ */
+export function PaneDivider({
+  pane,
+  side = 'left',
+  min = MIN_WIDTH,
+  max = MAX_WIDTH,
+}: {
+  pane: keyof UiState['paneWidths'];
+  side?: 'left' | 'right';
+  min?: number;
+  max?: number;
+}) {
   const { ui } = useServices();
   const start = useRef<{ x: number; width: number } | null>(null);
   return (
@@ -48,11 +71,14 @@ function Divider({ pane }: { pane: keyof UiState['paneWidths'] }) {
       aria-label="Resize"
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
-        start.current = { x: event.clientX, width: ui.get().paneWidths[pane] };
+        // A pane to the right can be shown at a default share of the window, so its own width is read.
+        const shown = side === 'right' ? (event.currentTarget.nextElementSibling as HTMLElement | null)?.offsetWidth : undefined;
+        start.current = { x: event.clientX, width: shown ?? ui.get().paneWidths[pane] };
       }}
       onPointerMove={(event) => {
         if (!start.current) return;
-        const width = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, start.current.width + event.clientX - start.current.x));
+        const moved = (event.clientX - start.current.x) * (side === 'left' ? 1 : -1);
+        const width = Math.max(min, Math.min(max, start.current.width + moved));
         patchUi(ui, { paneWidths: { ...ui.get().paneWidths, [pane]: width } });
       }}
       onPointerUp={() => (start.current = null)}

@@ -1,4 +1,8 @@
-/** The title bar: undo and redo at the left, the page title centred, Export and the sync status at the right. */
+/**
+ * The title bar: undo and redo at the left, the title centred, Export and the
+ * sync status at the right. The title names the page shown and its notebook;
+ * in the board view with no page open beside the board it names the board.
+ */
 import { ArrowDownloadRegular, ArrowRedoRegular, ArrowUndoRegular } from '@fluentui/react-icons';
 import { getNode, getNotebook } from '@looseleaf/model';
 import { useServices } from './services.js';
@@ -9,10 +13,13 @@ import { IconButton } from './controls.js';
 import { usePageHistory } from '../canvas/use-page.js';
 
 export function TitleBar() {
-  const { selection, notebooks, library, commands } = useServices();
+  const { selection, notebooks, library, commands, ui } = useServices();
   const sel = useStore(selection);
+  const { view, boardPage } = useStore(ui);
   const doc = useStore(notebooks.docs).get(sel.notebookId ?? '') ?? null;
-  const title = useYValue(doc, () => (doc && sel.pageId ? (getNode(doc, sel.pageId)?.name ?? '') : ''), sel.pageId);
+  const shownPage = view === 'board' ? boardPage : sel.pageId;
+  const pageTitle = useYValue(doc, () => (doc && shownPage ? (getNode(doc, shownPage)?.name ?? '') : ''), shownPage);
+  const title = shownPage ? pageTitle || 'Untitled page' : view === 'board' ? 'Board' : '';
   const notebookName = useYValue(library, () => (sel.notebookId ? (getNotebook(library, sel.notebookId)?.name ?? '') : ''), sel.notebookId);
   usePageHistory();
 
@@ -27,8 +34,8 @@ export function TitleBar() {
         </IconButton>
       </div>
       <div className="title-bar-title" title={title}>
-        {sel.pageId ? <span className="title-page">{title || 'Untitled page'}</span> : null}
-        {notebookName ? <span className="title-notebook">{sel.pageId ? ' · ' : ''}{notebookName}</span> : null}
+        {title ? <span className="title-page">{title}</span> : null}
+        {notebookName ? <span className="title-notebook">{title ? ' · ' : ''}{notebookName}</span> : null}
       </div>
       <div className="title-bar-right">
         <button className="title-button" onClick={() => commands.run('export')} title="Export">

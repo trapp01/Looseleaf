@@ -1,7 +1,10 @@
 /**
  * Transient view state shared across the app: which rail panel and view are
- * showing, which dialog is open, the zoom, the drawing tool and the phone's
- * current pane. Selection lives in selection.ts; nothing here is synced.
+ * showing, which dialog is open, the zoom, the drawing tool, the phone's
+ * current pane, and on the board the page open beside it, the label filter,
+ * the keyword search and the open composer. Pane widths and whether the board
+ * shows beside the page are kept per device. Selection lives in selection.ts;
+ * nothing here is synced.
  */
 import type { ExportScopeChoice } from '../exporting/export-run.js';
 import { readLocal, writeLocal } from './local-settings.js';
@@ -20,11 +23,16 @@ export type Dialog =
   | { kind: 'link'; href: string }
   | { kind: 'new-notebook' }
   | { kind: 'move'; notebookId: string; nodeId: string }
-  | { kind: 'phone-format' };
+  | { kind: 'phone-format' }
+  | { kind: 'new-board'; notebookId: string }
+  | { kind: 'board-labels' }
+  | { kind: 'board-archive' }
+  | { kind: 'board-shortcuts' };
 
 export interface UiState {
   railPanel: RailPanel;
-  view: 'page' | 'deleted';
+  /** The notebook view (sections, pages, page), Deleted notes, or the selected notebook's board. */
+  view: 'page' | 'deleted' | 'board';
   dialog: Dialog | null;
   /** The notebook, group or section whose name is being edited in place. */
   renaming: string | null;
@@ -40,11 +48,26 @@ export interface UiState {
   inkColor: string;
   inkWidth: number;
   phonePane: PhonePane;
-  paneWidths: { sections: number; pages: number };
+  /** In px. `board` is 0 until the divider beside it is dragged; the board then takes half of what the nav panes leave. */
+  paneWidths: { sections: number; pages: number; board: number };
+  /** The page open beside the board in the board view: a card's, or the page an Inbox line is on. */
+  boardPage: string | null;
+  /** In the notebook view, the board shows as a pane beside the page. */
+  boardBeside: boolean;
+  /** The board shows only cards carrying any of these labels; none means every card. */
+  boardLabels: string[];
+  /** The board shows only cards with every word of this; '' means every card. */
+  boardQuery: string;
+  /** Bumped to move focus to the board's search box. */
+  focusBoardSearch: number;
+  /** The status whose card composer is open. */
+  composer: string | null;
 }
 
 export const ZOOM_STEPS = [0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 2, 3];
 const WIDTHS_KEY = 'paneWidths';
+const BESIDE_KEY = 'boardBeside';
+const DEFAULT_WIDTHS: UiState['paneWidths'] = { sections: 268, pages: 238, board: 0 };
 
 export function createUiState(): Store<UiState> {
   const store = new Store<UiState>({
@@ -61,13 +84,25 @@ export function createUiState(): Store<UiState> {
     inkColor: '#1f1f1f',
     inkWidth: 2,
     phonePane: 'sections',
-    paneWidths: readLocal(WIDTHS_KEY, { sections: 268, pages: 238 }),
+    // Widths saved before a pane existed lack it, so the defaults fill the gaps.
+    paneWidths: { ...DEFAULT_WIDTHS, ...readLocal<Partial<UiState['paneWidths']>>(WIDTHS_KEY, {}) },
+    boardPage: null,
+    boardBeside: readLocal(BESIDE_KEY, false),
+    boardLabels: [],
+    boardQuery: '',
+    focusBoardSearch: 0,
+    composer: null,
   });
-  let widths = store.get().paneWidths;
+  let { paneWidths: widths, boardBeside: beside } = store.get();
   store.subscribe(() => {
-    if (store.get().paneWidths !== widths) {
-      widths = store.get().paneWidths;
+    const next = store.get();
+    if (next.paneWidths !== widths) {
+      widths = next.paneWidths;
       writeLocal(WIDTHS_KEY, widths);
+    }
+    if (next.boardBeside !== beside) {
+      beside = next.boardBeside;
+      writeLocal(BESIDE_KEY, beside);
     }
   });
   return store;

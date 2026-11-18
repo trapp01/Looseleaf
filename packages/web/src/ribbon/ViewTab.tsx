@@ -1,6 +1,7 @@
-/** The View tab: zoom, paper colour and style, Deleted notes; the rest shows disabled in OneNote's places. */
+/** The View tab: zoom, paper colour and style, the board beside the page, Deleted notes; the rest shows disabled in OneNote's places. */
 import {
   AccessibilityCheckmarkRegular,
+  BoardRegular,
   ClosedCaptionRegular,
   DarkThemeRegular,
   DeleteRegular,
@@ -19,6 +20,7 @@ import { PAPER_STYLES, readPageMeta, setPaperColor, setPaperStyle, type PaperSty
 import { useServices } from '../app/services.js';
 import { useStore } from '../app/store.js';
 import { patchUi, ZOOM_STEPS } from '../app/ui-state.js';
+import { useCurrentBoard } from '../board/live-board.js';
 import { usePageHistory } from '../canvas/use-page.js';
 import { useYValue } from '../app/yjs-hooks.js';
 import { Cmd, ColorGrid, Group, MenuButton, Row, Rows, Unavailable } from './parts.js';
@@ -100,6 +102,7 @@ export function ViewTab() {
         </MenuButton>
         <Unavailable icon={<EyeOffRegular />} label="Hide page title" large />
       </Group>
+      <BoardGroup />
       <Group label="Notes">
         <Cmd id="deleted-notes" icon={<DeleteRegular />} large />
         <Unavailable icon={<PeopleRegular />} label="Hide authors" large />
@@ -110,5 +113,15 @@ export function ViewTab() {
         <Unavailable icon={<ClosedCaptionRegular />} label="Live captions" large />
       </Group>
     </div>
+  );
+}
+
+/** "Board beside page"; it re-renders as the board loads, so it enables once the notebook's board is known. */
+function BoardGroup() {
+  useCurrentBoard();
+  return (
+    <Group label="Board">
+      <Cmd id="board-beside" icon={<BoardRegular />} large />
+    </Group>
   );
 }

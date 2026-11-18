@@ -1,0 +1,116 @@
+/* The label picker and label filter popovers, the Labels and Archived items dialogs, and the Add a board dialog's key field. */
+.label-list,
+.archive-list,
+.check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.label-picker-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 280px;
+  padding: 12px;
+}
+
+.popover-note {
+  margin: 0;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.check-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+@media (pointer: coarse) {
+  .check-row {
+    min-height: 44px;
+  }
+}
+
+.label-swatch {
+  display: inline-grid;
+  place-items: center;
+  background: var(--swatch);
+  color: #fff;
+  font-size: 13px;
+}
+
+.label-row,
+.archive-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+
+.label-editor {
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--bg-hover);
+}
+
+.confirm-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-gap {
+  margin-top: 20px;
+}
+
+.section-gap h3,
+.archive-section h3 {
+  font-size: 13px;
+}
+
+.archive-section + .archive-section {
+  margin-top: 16px;
+}
+
+.archive-section h3 {
+  margin-bottom: 8px;
+}
+
+.archive-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field > label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.key-input {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.field-hint {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.field-hint.is-error {
+  color: var(--danger);
+}

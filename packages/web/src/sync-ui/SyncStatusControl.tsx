@@ -98,7 +98,8 @@ export function SyncDetails({ status, onClose }: { status: SyncStatus; onClose?:
             </dd>
           </>
         )}
-        {status.lastError && !(status.unstoredDocs > 0 && status.lastError.kind === 'store') && (
+        {/* An outdated app's error is the detail sentence above. */}
+        {status.lastError && status.lastError.kind !== 'outdated' && !(status.unstoredDocs > 0 && status.lastError.kind === 'store') && (
           <>
             <dt>Last error</dt>
             <dd className="details-error">{status.lastError.message}</dd>

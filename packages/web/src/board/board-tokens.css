@@ -1,0 +1,114 @@
+/*
+ * Board colours, light and dark. The ten label colours (LABEL_COLORS in
+ * packages/model) each have a swatch and a chip background and text kept at
+ * 4.5:1 contrast or better; `.label-<name>` sets --swatch, --chip-bg and
+ * --chip-fg on an element. Chips also show in the card strip and in popovers,
+ * so their pairs sit on :root under the `--label-` prefix. The board's own
+ * surfaces (backdrop, column, card, due badges, flash) are scoped to the
+ * board screen; --board is the notebook's colour, set inline.
+ */
+:root {
+  --label-green: #2f9e5b;
+  --label-lime: #74a83a;
+  --label-yellow: #d9a90b;
+  --label-orange: #e2772c;
+  --label-red: #d64545;
+  --label-pink: #d2559a;
+  --label-purple: #8559d0;
+  --label-blue: #3b73d6;
+  --label-teal: #1f9aa0;
+  --label-gray: #7b8794;
+
+  --label-green-bg: #cdeed9;
+  --label-green-fg: #14532d;
+  --label-lime-bg: #e2f2c4;
+  --label-lime-fg: #38500f;
+  --label-yellow-bg: #fbeeb0;
+  --label-yellow-fg: #5c4400;
+  --label-orange-bg: #fddcc2;
+  --label-orange-fg: #7a3405;
+  --label-red-bg: #fbd3d0;
+  --label-red-fg: #8a1c16;
+  --label-pink-bg: #f9d3e7;
+  --label-pink-fg: #84194f;
+  --label-purple-bg: #e5d9fb;
+  --label-purple-fg: #4c2a91;
+  --label-blue-bg: #d4e2fb;
+  --label-blue-fg: #1d3f86;
+  --label-teal-bg: #c8ecec;
+  --label-teal-fg: #0f5257;
+  --label-gray-bg: #e1e5ea;
+  --label-gray-fg: #39424e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --label-green-bg: #1d4a31;
+    --label-green-fg: #b8ecca;
+    --label-lime-bg: #34481a;
+    --label-lime-fg: #d6efa9;
+    --label-yellow-bg: #4d3d05;
+    --label-yellow-fg: #f6e08a;
+    --label-orange-bg: #5a2e0f;
+    --label-orange-fg: #fbc79f;
+    --label-red-bg: #5e1f1c;
+    --label-red-fg: #f8b4ae;
+    --label-pink-bg: #5a1d3d;
+    --label-pink-fg: #f5b3d6;
+    --label-purple-bg: #3a2a63;
+    --label-purple-fg: #d6c5fa;
+    --label-blue-bg: #1e3361;
+    --label-blue-fg: #bcd2fa;
+    --label-teal-bg: #11474a;
+    --label-teal-fg: #a6e3e3;
+    --label-gray-bg: #343c47;
+    --label-gray-fg: #d3d9e1;
+  }
+}
+
+.label-green { --swatch: var(--label-green); --chip-bg: var(--label-green-bg); --chip-fg: var(--label-green-fg); }
+.label-lime { --swatch: var(--label-lime); --chip-bg: var(--label-lime-bg); --chip-fg: var(--label-lime-fg); }
+.label-yellow { --swatch: var(--label-yellow); --chip-bg: var(--label-yellow-bg); --chip-fg: var(--label-yellow-fg); }
+.label-orange { --swatch: var(--label-orange); --chip-bg: var(--label-orange-bg); --chip-fg: var(--label-orange-fg); }
+.label-red { --swatch: var(--label-red); --chip-bg: var(--label-red-bg); --chip-fg: var(--label-red-fg); }
+.label-pink { --swatch: var(--label-pink); --chip-bg: var(--label-pink-bg); --chip-fg: var(--label-pink-fg); }
+.label-purple { --swatch: var(--label-purple); --chip-bg: var(--label-purple-bg); --chip-fg: var(--label-purple-fg); }
+.label-blue { --swatch: var(--label-blue); --chip-bg: var(--label-blue-bg); --chip-fg: var(--label-blue-fg); }
+.label-teal { --swatch: var(--label-teal); --chip-bg: var(--label-teal-bg); --chip-fg: var(--label-teal-fg); }
+.label-gray { --swatch: var(--label-gray); --chip-bg: var(--label-gray-bg); --chip-fg: var(--label-gray-fg); }
+
+.board-screen {
+  --board: #3b73d6;
+  --board-backdrop-base: #d6dce4;
+  --board-column: #eef1f5;
+  --board-card: #ffffff;
+  --board-hover: rgba(27, 35, 48, 0.06);
+  --board-ink-rule: rgba(27, 35, 48, 0.2);
+  --board-overdue-bg: #fbe0dd;
+  --board-overdue-fg: #9b1c14;
+  --board-today-bg: #fdf0c8;
+  --board-today-fg: #6b4e00;
+  --board-flash: #f2b705;
+  --board-shadow-card: 0 1px 0 rgba(27, 35, 48, 0.12), 0 1px 3px rgba(27, 35, 48, 0.06);
+  --board-shadow-lift: 0 10px 24px rgba(27, 35, 48, 0.22), 0 2px 6px rgba(27, 35, 48, 0.12);
+  --board-column-width: 272px;
+  --board-radius-card: 8px;
+  --board-radius-column: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .board-screen {
+    --board-backdrop-base: #141920;
+    --board-column: #1d232c;
+    --board-card: #2a313b;
+    --board-hover: rgba(230, 234, 240, 0.07);
+    --board-ink-rule: rgba(230, 234, 240, 0.22);
+    --board-overdue-bg: #5b1f1b;
+    --board-overdue-fg: #ffc2bb;
+    --board-today-bg: #4a3b0a;
+    --board-today-fg: #f9e19a;
+    --board-flash: #f5c542;
+    --board-shadow-card: 0 1px 0 rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
+    --board-shadow-lift: 0 12px 28px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+}

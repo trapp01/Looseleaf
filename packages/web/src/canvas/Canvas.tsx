@@ -28,11 +28,14 @@ export function Canvas({
   scroller,
   zoom,
   titleBlock,
+  titleHeight = TITLE_BLOCK_HEIGHT,
 }: {
   session: PageSession;
   scroller: RefObject<HTMLDivElement>;
   zoom: number;
   titleBlock: ReactNode;
+  /** The title block's height in canvas px; more than TITLE_BLOCK_HEIGHT when a card strip sits in it. */
+  titleHeight?: number;
 }) {
   const services = useServices();
   const { ui } = services;
@@ -105,7 +108,7 @@ export function Canvas({
   }, [state.fitWidth, extent.right, viewport.width, ui]);
 
   const width = Math.max(viewport.width / zoom, extent.right + GROW_ROOM_X);
-  const height = Math.max((viewport.height / zoom) - TITLE_BLOCK_HEIGHT, extent.bottom + GROW_ROOM_Y);
+  const height = Math.max((viewport.height / zoom) - titleHeight, extent.bottom + GROW_ROOM_Y);
 
   const pointToCanvas = (clientX: number, clientY: number) => {
     const rect = layer.current!.getBoundingClientRect();
@@ -115,8 +118,8 @@ export function Canvas({
   const drawing = state.tool !== 'text';
 
   return (
-    <div className="page-sizer" style={{ width: width * zoom, height: (height + TITLE_BLOCK_HEIGHT) * zoom }}>
-      <div className="page-zoom" style={{ width, transform: `scale(${zoom})` }}>
+    <div className="page-sizer" style={{ width: width * zoom, height: (height + titleHeight) * zoom }}>
+      <div className="page-zoom" style={{ width, transform: `scale(${zoom})`, ['--view-width' as string]: `${viewport.width / zoom}px` }}>
         {titleBlock}
         <div
           className={`canvas ${drawing ? 'is-drawing' : ''}`}

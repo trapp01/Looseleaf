@@ -1,0 +1,310 @@
+/* The dock holding the Inbox lane at the board's left while the statuses scroll under it, the Inbox lane and its lines, the marker where a dragged line lands, the board's search box and shortcut list, and the board beside a page. */
+.inbox-dock {
+  position: sticky;
+  /* Sticky offsets count from inside the board's padding; this puts the dock's edge at the board's edge. */
+  left: -16px;
+  z-index: 3;
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  /* It reaches over the board's padding, so nothing scrolling under it shows at its edges. */
+  margin: -12px 0 -16px -16px;
+  padding: 12px 0 16px 16px;
+  background-color: var(--board-backdrop);
+  background-image: var(--board-grain);
+  background-size: 7px 7px;
+}
+
+/* Once statuses have scrolled under the dock, a soft edge shows where they pass. */
+.board.is-scrolled .inbox-dock {
+  box-shadow: 10px 0 10px -10px rgba(0, 0, 0, 0.25);
+}
+
+.board-beside .inbox-dock {
+  left: -12px;
+  margin: -10px 0 -12px -12px;
+  padding: 10px 0 12px 12px;
+}
+
+.inbox-lane {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  width: var(--board-column-width);
+  border: 1.5px dashed var(--board-ink-rule);
+  border-radius: var(--board-radius-column);
+  background: color-mix(in srgb, var(--board-column) 55%, transparent);
+}
+
+.inbox-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 6px 12px;
+}
+
+.inbox-icon {
+  flex: none;
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.inbox-empty {
+  margin: 0;
+  padding: 2px 12px 12px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.inbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 2px 8px 8px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+/* A line, not a card: flat, with a tick box where a card has its labels. */
+.inbox-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 4px 6px 9px;
+  border: 1px solid var(--board-ink-rule);
+  border-radius: var(--board-radius-card);
+  background: color-mix(in srgb, var(--board-card) 80%, transparent);
+  cursor: grab;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+}
+
+.inbox-line:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.inbox-line.is-placeholder {
+  opacity: 0.35;
+}
+
+.inbox-line.is-overlay {
+  width: var(--board-column-width);
+  background: var(--board-card);
+  box-shadow: var(--board-shadow-lift);
+  transform: rotate(2deg);
+  cursor: grabbing;
+}
+
+/* The label around the tick box widens what a finger can hit without moving the box. */
+.inbox-tick-hit {
+  flex: none;
+  display: grid;
+  place-items: center;
+  margin: -4px -6px -4px -8px;
+  padding: 4px 6px 4px 8px;
+  cursor: pointer;
+}
+
+.inbox-tick {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  cursor: pointer;
+}
+
+.inbox-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.inbox-text {
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.inbox-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 0 4px;
+  margin-left: -4px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--fg-muted);
+  font-size: 12px;
+  text-align: left;
+}
+
+.inbox-source span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-menu-button {
+  flex: none;
+  margin: -4px 0;
+}
+
+@media (hover: hover) {
+  .inbox-source:hover {
+    background: var(--board-hover);
+    color: var(--fg);
+    text-decoration: underline;
+  }
+}
+
+/* A status's kind marker as the icon of its item in the line menu. */
+.menu-kind {
+  display: inline-flex;
+}
+
+/* Where a dragged Inbox line becomes a card. */
+.status-column.is-line-target {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.line-drop-marker {
+  height: 3px;
+  margin: -2px 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* The board's search box in its bar. */
+.board-search {
+  flex: 0 1 220px;
+  height: 32px;
+  position: relative;
+}
+
+.search-hint {
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.board-search input:focus + .search-hint,
+.board-search input:not(:placeholder-shown) + .search-hint {
+  display: none;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 5px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--bg-surface);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  text-align: center;
+}
+
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: baseline;
+}
+
+.shortcut-row dd {
+  margin: 0;
+}
+
+/* The board as a pane beside the page in the notebook view. */
+.page-and-board {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.page-beside-board {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.board-screen.board-beside {
+  flex: none;
+  max-width: calc(100% - 280px);
+  border-left: 1px solid var(--line);
+}
+
+.board-beside .board-bar {
+  padding: 8px 10px 0 12px;
+}
+
+.board-beside .board {
+  gap: 10px;
+  padding: 10px 12px 12px;
+}
+
+/* A card or loose page's Board toggle; a phone shows one pane at a time, so it has none. */
+.loose-strip {
+  display: flex;
+  padding: 8px 0 2px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.is-phone .board-beside-toggle,
+.is-phone .loose-strip {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .inbox-source {
+    min-height: 44px;
+  }
+
+  .inbox-tick-hit {
+    min-width: 44px;
+    min-height: 44px;
+    margin: -10px -6px -10px -9px;
+  }
+
+  .inbox-tick {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (max-width: 767px) {
+  .inbox-dock {
+    position: static;
+    align-self: flex-start;
+    max-height: 100%;
+    margin: 0;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+    scroll-snap-align: start;
+  }
+
+  .board-search {
+    flex: 1 1 160px;
+  }
+
+  .search-hint {
+    display: none;
+  }
+}

@@ -12,6 +12,13 @@ import type { MenuCommand } from '../shell-bridge.js';
 /** What the app offers commands that are not text formatting. */
 export interface AppActions {
   hasPage(): boolean;
+  /** The open page's notebook has a board and the page is not a card on it. */
+  canPutOnBoard(): boolean;
+  putOnBoard(): void;
+  /** The notebook view shows and its notebook has a board. */
+  canShowBoardBeside(): boolean;
+  boardBesideOpen(): boolean;
+  toggleBoardBeside(): void;
   newPage(): void;
   newSection(): void;
   newSectionGroup(): void;
@@ -289,6 +296,13 @@ export const COMMANDS = {
   },
   'insert-picture': pageCommand('Picture', (app) => app.insertPicture()),
   'insert-file': pageCommand('File', (app) => app.insertFile()),
+  'put-on-board': appCommand('Put on board', (app) => app.putOnBoard(), undefined, (app) => app.canPutOnBoard()),
+  'board-beside': {
+    label: 'Board beside page',
+    enabled: (ctx) => ctx.app.canShowBoardBeside(),
+    active: (ctx) => ctx.app.canShowBoardBeside() && ctx.app.boardBesideOpen(),
+    run: (ctx) => ctx.app.toggleBoardBeside(),
+  },
 
   undo: appCommand('Undo', (app) => app.undo(), ['Mod+Z'], (app) => app.canUndo()),
   redo: appCommand('Redo', (app) => app.redo(), ['Mod+Shift+Z', 'Mod+Y'], (app) => app.canRedo()),

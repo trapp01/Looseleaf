@@ -339,3 +339,109 @@
 .rich-text.ProseMirror:focus-visible {
   box-shadow: none;
 }
+
+/* A card link: an inline chip with the card's ref, page title and status, drawn by board/card-link-view.ts. */
+.rich-text span[data-card-link] {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  padding: 0 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--bg-surface);
+  font-family: var(--font-ui);
+  font-size: 0.9em;
+  line-height: 1.5;
+  white-space: nowrap;
+  vertical-align: baseline;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Until it is drawn (a print, or a render with no board yet) it still reads as a link. */
+.rich-text span[data-card-link]:empty::before {
+  content: 'Linked card';
+  color: var(--fg-muted);
+}
+
+@media (hover: hover) {
+  .rich-text span[data-card-link]:hover {
+    border-color: var(--accent);
+  }
+}
+
+.rich-text span[data-card-link].ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.card-link-ref {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  color: var(--fg-muted);
+}
+
+.card-link-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg);
+}
+
+.card-link-status {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--fg-muted);
+  font-size: 0.88em;
+}
+
+.card-link[data-kind='doing'] .card-link-status {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.card-link[data-kind='done'] .card-link-title {
+  color: var(--fg-muted);
+}
+
+.card-link[data-state='archived'] .card-link-title {
+  color: var(--fg-muted);
+}
+
+.card-link[data-state='archived'] .card-link-status {
+  font-style: italic;
+}
+
+/* The "Inbox" pill at the end of a To Do line in the board's Inbox; its hit area reaches past the chip for fingers. */
+.inbox-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 1.35em;
+  margin-left: 8px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  vertical-align: 0.1em;
+  cursor: pointer;
+  user-select: none;
+}
+
+.inbox-pill::after {
+  content: '';
+  position: absolute;
+  inset: -12px -6px;
+}
+
+@media (hover: hover) {
+  .inbox-pill:hover {
+    border-color: var(--accent);
+  }
+}

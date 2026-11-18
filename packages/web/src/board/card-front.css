@@ -1,0 +1,180 @@
+/* A card's front in its status: labels, title, the page's first lines, the meta row, the finished look, the flash for changes from elsewhere, and label chips. */
+.card-front {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 7px;
+  border: 1px solid transparent;
+  border-radius: var(--board-radius-card);
+  background: var(--board-card);
+  box-shadow: var(--board-shadow-card);
+  color: var(--fg);
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-touch-callout: none;
+}
+
+@media (hover: hover) {
+  .card-front:hover {
+    border-color: var(--board-ink-rule);
+  }
+}
+
+.card-front:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.card-front.is-open {
+  border-color: var(--accent);
+}
+
+.card-front.is-overlay {
+  box-shadow: var(--board-shadow-lift);
+  transform: rotate(2deg);
+  cursor: grabbing;
+}
+
+.card-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.card-title {
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.card-front.is-done .card-title {
+  color: var(--fg-muted);
+}
+
+.card-done-mark {
+  margin-right: 5px;
+  vertical-align: -2px;
+  color: var(--ok);
+}
+
+.card-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  line-height: 17px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.card-excerpt.is-pending {
+  display: block;
+  width: 70%;
+  height: 11px;
+  margin: 3px 0;
+  border-radius: 4px;
+  background: var(--board-hover);
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.card-ref {
+  font-size: 11.5px;
+  color: var(--fg-faint);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.badge.is-complete {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+.badge.due-overdue,
+.badge.due-today {
+  padding: 0 5px;
+  margin: 0 -2px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.badge.due-overdue {
+  background: var(--board-overdue-bg);
+  color: var(--board-overdue-fg);
+}
+
+.badge.due-today {
+  background: var(--board-today-bg);
+  color: var(--board-today-fg);
+}
+
+/* A card changed from elsewhere glows briefly, so the person watching sees an agent working. */
+.card-front.is-flashing {
+  animation: card-flash 1.6s ease-out;
+}
+
+@keyframes card-flash {
+  0% {
+    box-shadow: 0 0 0 3px var(--board-flash), var(--board-shadow-card);
+    background: color-mix(in srgb, var(--board-flash) 22%, var(--board-card));
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent, var(--board-shadow-card);
+    background: var(--board-card);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-front.is-flashing {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--board-flash), var(--board-shadow-card);
+  }
+
+  .card-front.is-overlay {
+    transform: none;
+  }
+}
+
+.label-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 1px 8px;
+  border-radius: 4px;
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.label-chip.is-small {
+  padding: 0 6px;
+  font-size: 11.5px;
+  line-height: 17px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

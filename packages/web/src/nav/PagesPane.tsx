@@ -2,7 +2,8 @@
  * The pages pane: the selected section's pages with subpage indent, a sort
  * control (manual order, title, date created, date modified), "Add page"
  * pinned at the bottom, drag to reorder in manual order, and a context menu
- * per row (make subpage, promote, move, export, delete).
+ * per row (make subpage, promote, move, put on board, export, delete). A
+ * page that is a card shows its status after its title.
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
@@ -11,18 +12,20 @@ import {
   ArrowLeftRegular,
   ArrowMoveRegular,
   ArrowSortRegular,
+  BoardRegular,
   CheckmarkRegular,
   DeleteRegular,
   TextIndentDecreaseRegular,
   TextIndentIncreaseRegular,
 } from '@fluentui/react-icons';
-import { deleteNode, moveNode, setPageLevel, type PageEntry, type PageLevel } from '@looseleaf/model';
+import { deleteNode, findStatus, moveNode, putOnBoard, setPageLevel, shownStatusId, type PageEntry, type PageLevel } from '@looseleaf/model';
 import { Popover } from '../app/controls.js';
 import { readLocal, writeLocal } from '../app/local-settings.js';
 import { useServices } from '../app/services.js';
 import { allSections } from '../app/selection.js';
 import { useStore } from '../app/store.js';
 import { patchUi } from '../app/ui-state.js';
+import { liveCard, useCurrentBoard, type CurrentBoard } from '../board/live-board.js';
 import { useRowMenu, type MenuEntry } from './context-menu.js';
 import { DRAG_TYPE, indexAmong, pageBlock, dropPosition, type DragPayload } from './drop.js';
 import { currentDrag, setCurrentDrag } from './drag-state.js';
@@ -59,6 +62,8 @@ export function PagesPane({ onBack, onOpenPage }: { onBack?: () => void; onOpenP
   const sortButton = useRef<HTMLButtonElement>(null);
   const [drop, setDrop] = useState<{ id: string; position: 'before' | 'after' } | null>(null);
   const pages = useMemo(() => sortPages(section?.pages ?? [], sort), [section, sort]);
+  const current = useCurrentBoard();
+  const board = current && current.notebookId === sel.notebookId ? current : null;
 
   const onDrop = (event: DragEvent, target: PageEntry) => {
     event.preventDefault();
@@ -123,6 +128,7 @@ export function PagesPane({ onBack, onOpenPage }: { onBack?: () => void; onOpenP
           <PageRow
             key={page.id}
             page={page}
+            board={board}
             previousLevel={sort === 'manual' ? (pages[i - 1]?.level ?? -1) : -1}
             indent={sort === 'manual'}
             selected={page.id === sel.pageId}
@@ -153,8 +159,17 @@ export function PagesPane({ onBack, onOpenPage }: { onBack?: () => void; onOpenP
   );
 }
 
+/** The status a page's card shows under, or null when the page is not a card on the board. */
+function cardStatus(board: CurrentBoard | null, pageId: string): string | null {
+  const card = board ? liveCard(board.board, pageId) : null;
+  if (!board || !card) return null;
+  const statusId = shownStatusId(board.board, card);
+  return statusId ? (findStatus(board.board, statusId)?.name ?? null) : null;
+}
+
 function PageRow({
   page,
+  board,
   previousLevel,
   indent,
   selected,
@@ -166,6 +181,7 @@ function PageRow({
   onDrop,
 }: {
   page: PageEntry;
+  board: CurrentBoard | null;
   previousLevel: number;
   indent: boolean;
   selected: boolean;
@@ -176,8 +192,10 @@ function PageRow({
   onDragLeave: () => void;
   onDrop: (e: DragEvent) => void;
 }) {
-  const { selection, notebooks, ui, commands } = useServices();
+  const { selection, notebooks, ui, commands, actor } = useServices();
   const notebookId = selection.get().notebookId!;
+  const status = cardStatus(board, page.id);
+  const isCard = board !== null && liveCard(board.board, page.id) !== null;
   const entries = (): MenuEntry[] => {
     const doc = notebooks.get(notebookId);
     if (!doc) return [];
@@ -188,6 +206,9 @@ function PageRow({
       { label: 'Make subpage', icon: <TextIndentIncreaseRegular />, disabled: page.level >= 2 || page.level > previousLevel, onSelect: () => setLevel(page.level + 1) },
       { label: 'Promote subpage', icon: <TextIndentDecreaseRegular />, disabled: page.level === 0, onSelect: () => setLevel(page.level - 1) },
       { label: 'Move to…', icon: <ArrowMoveRegular />, onSelect: () => patchUi(ui, { dialog: { kind: 'move', notebookId, nodeId: page.id } }) },
+      ...(board && !isCard
+        ? [{ label: 'Put on board', icon: <BoardRegular />, onSelect: () => void putOnBoard(board.doc, page.id, { by: actor.get() }) }]
+        : []),
       {
         label: 'Export page…',
         icon: <ArrowDownloadRegular />,
@@ -226,6 +247,7 @@ function PageRow({
       {...menu.handlers}
     >
       <span className={`row-label ${page.title ? '' : 'is-untitled'}`}>{page.title || 'Untitled page'}</span>
+      {status !== null && <span className="row-status">{status}</span>}
     </div>
   );
 }

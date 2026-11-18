@@ -49,23 +49,53 @@ describe('PageSession modified time', () => {
 });
 
 describe('followPageText', () => {
-  it('hands text to search once typing pauses', () => {
+  const sinks = () => ({ search: { setPageText: vi.fn() }, lines: { set: vi.fn() } });
+
+  it('hands text to search and To Do lines to the line index once typing pauses', () => {
     const { notebookDoc, pageId, doc } = openPage();
-    const setPageText = vi.fn();
-    const stop = followPageText(doc, notebookDoc, pageId, { setPageText }, 3000);
+    const { search, lines } = sinks();
+    const setPageText = search.setPageText;
+    const stop = followPageText(doc, notebookDoc, { notebookId: 'nb', pageId }, { search, lines }, 3000);
     write(doc, 'hello');
+    addTextContainer(doc, {
+      x: 0,
+      y: 200,
+      width: 100,
+      body: { type: 'doc', content: [{ type: 'paragraph', attrs: { tag: 'todo', checked: true }, content: [{ type: 'text', text: 'Water the ferns' }] }] },
+    });
     vi.advanceTimersByTime(2999);
     expect(setPageText).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(setPageText).toHaveBeenCalledWith(pageId, expect.stringContaining('hello'), expect.any(Number));
+    expect(lines.set).toHaveBeenCalledWith(pageId, 'nb', [expect.objectContaining({ text: 'Water the ferns', checked: true })]);
     stop();
     expect(setPageText).toHaveBeenCalledTimes(1);
   });
 
+  it('hands To Do lines to the line index on open and a quarter second after typing pauses, long before the text', () => {
+    const { notebookDoc, pageId, doc } = openPage();
+    const { search, lines } = sinks();
+    const stop = followPageText(doc, notebookDoc, { notebookId: 'nb', pageId }, { search, lines }, 3000, 250);
+    expect(lines.set).toHaveBeenCalledTimes(1);
+    addTextContainer(doc, {
+      x: 0,
+      y: 0,
+      width: 100,
+      body: { type: 'doc', content: [{ type: 'paragraph', attrs: { tag: 'todo', checked: true }, content: [{ type: 'text', text: 'Feed the hens' }] }] },
+    });
+    vi.advanceTimersByTime(249);
+    expect(lines.set).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    expect(lines.set).toHaveBeenLastCalledWith(pageId, 'nb', [expect.objectContaining({ text: 'Feed the hens', checked: true })]);
+    expect(search.setPageText).not.toHaveBeenCalled();
+    stop();
+  });
+
   it('writes the waiting text when the page closes before the pause ends', () => {
     const { notebookDoc, pageId, doc } = openPage();
-    const setPageText = vi.fn();
-    const stop = followPageText(doc, notebookDoc, pageId, { setPageText }, 3000);
+    const { search, lines } = sinks();
+    const setPageText = search.setPageText;
+    const stop = followPageText(doc, notebookDoc, { notebookId: 'nb', pageId }, { search, lines }, 3000);
     write(doc, 'typed just before closing');
     stop();
     expect(setPageText).toHaveBeenCalledTimes(1);

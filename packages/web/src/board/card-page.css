@@ -1,0 +1,476 @@
+/* A card's page: the pane beside the board, the card strip under the title, and the Activity panel. */
+/* The frame is a size container so the Activity panel can tell when it would squeeze the canvas. */
+.page-frame {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  position: relative;
+  container: page-frame / inline-size;
+}
+
+.page-frame > .page-view {
+  min-width: 0;
+}
+
+.card-pane {
+  flex: none;
+  width: min(55%, 760px);
+  min-width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+  background: var(--bg-canvas);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
+}
+
+.card-pane-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-pane);
+}
+
+/* Card strip */
+.card-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  /* --view-width is the visible part of the canvas, so the strip wraps instead of running off the pane. */
+  max-width: min(640px, calc(var(--view-width, 640px) - 96px));
+  padding: 8px 0 2px;
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.card-strip .card-ref {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+
+.strip-select,
+.strip-due input,
+.strip-button {
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  font-size: 13px;
+}
+
+.strip-select {
+  padding: 0 6px;
+  max-width: 180px;
+}
+
+.strip-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+}
+
+.strip-button.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.strip-labels {
+  gap: 4px;
+  max-width: 280px;
+  overflow: hidden;
+}
+
+.strip-due {
+  display: inline-flex;
+  align-items: center;
+}
+
+.strip-due input {
+  padding: 0 6px;
+}
+
+.strip-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  font-size: 16px;
+}
+
+@media (hover: hover) {
+  .strip-icon:hover,
+  .strip-button:hover {
+    background: var(--bg-hover);
+  }
+}
+
+.strip-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--fg-muted);
+}
+
+.strip-count.is-complete {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+@media (pointer: coarse) {
+  .strip-select,
+  .strip-due input,
+  .strip-button,
+  .strip-icon {
+    height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Activity panel */
+.activity-panel {
+  flex: none;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+  background: var(--bg-pane);
+}
+
+.activity-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.activity-panel-header h2 {
+  font-size: 14px;
+}
+
+.activity-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 14px 16px;
+}
+
+/* Below 640 px the canvas would be left too narrow beside the panel, so the panel lies over the page's right edge instead. */
+@container page-frame (max-width: 639px) {
+  .activity-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    max-width: calc(100% - 48px);
+    box-shadow: -6px 0 18px rgba(0, 0, 0, 0.14);
+  }
+}
+
+.activity-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.activity-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.activity-heading svg {
+  color: var(--fg-muted);
+  font-size: 16px;
+}
+
+.placeholder-button {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--fg-muted);
+  text-align: left;
+}
+
+@media (hover: hover) {
+  .placeholder-button:hover {
+    background: var(--bg-hover);
+    color: var(--fg);
+  }
+}
+
+.link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.link-target {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--fg);
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  a.link-target:hover {
+    border-color: var(--line-strong);
+    background: var(--bg-hover);
+  }
+}
+
+.link-target svg {
+  flex: none;
+  color: var(--fg-muted);
+}
+
+.link-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.link-host {
+  color: var(--fg-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.link-form {
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--bg-hover);
+}
+
+.row-action {
+  opacity: 0.6;
+}
+
+.row-action:hover,
+.row-action:focus-visible {
+  opacity: 1;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline-activity {
+  color: var(--fg-muted);
+  font-size: 12.5px;
+}
+
+.timeline-activity time,
+.comment-head time {
+  color: var(--fg-faint);
+  font-size: 12px;
+}
+
+.actor {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.timeline-comment {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.comment-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.comment-body {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+}
+
+.comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 2px;
+}
+
+.link-button {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-muted);
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.link-button.danger {
+  color: var(--danger);
+}
+
+.comment-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.comment-box textarea,
+.timeline-comment textarea,
+.field select,
+.field textarea {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+
+.comment-box textarea,
+.timeline-comment textarea {
+  min-height: 52px;
+  resize: vertical;
+}
+
+.comment-box textarea:focus,
+.timeline-comment textarea:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.markdown {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown pre,
+.markdown blockquote {
+  margin: 0 0 0.7em;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  margin: 1em 0 0.4em;
+  font-size: 14px;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 1.4em;
+}
+
+.markdown pre {
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--bg-hover);
+  overflow-x: auto;
+}
+
+.markdown pre code {
+  padding: 0;
+  background: none;
+}
+
+.markdown blockquote {
+  padding-left: 12px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--fg-muted);
+}
+
+.markdown th,
+.markdown td {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+}
+
+@media (max-width: 767px) {
+  .board-screen.has-card .board-main {
+    display: none;
+  }
+
+  .card-pane {
+    width: 100%;
+    min-width: 0;
+    border-left: 0;
+    box-shadow: none;
+  }
+
+  .page-frame {
+    flex-direction: column;
+  }
+
+  /* On a phone the Activity panel is a sheet over the page, pinned to the bottom. */
+  .activity-panel {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-width: none;
+    z-index: 30;
+    width: auto;
+    max-height: 70%;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.18);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

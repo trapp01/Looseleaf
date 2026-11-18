@@ -77,7 +77,11 @@ export function Dialog({
   );
 }
 
-/** A panel anchored under (or above, when there is no room) an element; closes on outside press or Escape. */
+/**
+ * A panel anchored under an element, or above it when there is more room
+ * there, kept inside the window and below the title bar and ribbon (it
+ * scrolls when it is taller than the room); closes on outside press or Escape.
+ */
 export function Popover({
   anchor,
   onClose,
@@ -92,7 +96,7 @@ export function Popover({
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; maxHeight?: number } | null>(null);
   useLayoutEffect(() => {
     if (!anchor || !ref.current) return;
     const a = anchor.getBoundingClientRect();
@@ -101,9 +105,12 @@ export function Popover({
     const vh = window.innerHeight;
     let left = align === 'end' ? a.right - p.width : a.left;
     left = Math.max(8, Math.min(left, vw - p.width - 8));
-    let top = a.bottom + 4;
-    if (top + p.height > vh - 8 && a.top - p.height - 4 > 8) top = a.top - p.height - 4;
-    setPos({ left, top: Math.max(8, Math.min(top, vh - p.height - 8)) });
+    // A popover opened from the page stays below the title bar and ribbon; one opened from them may sit anywhere under them.
+    const floor = Math.max(8, ...[...document.querySelectorAll('.title-bar, .ribbon')].map((el) => el.getBoundingClientRect().bottom + 4).filter((bottom) => bottom <= a.top));
+    const below = vh - 8 - (a.bottom + 4);
+    const above = a.top - 4 - floor;
+    if (p.height <= below || below >= above) setPos({ left, top: a.bottom + 4, maxHeight: p.height > below ? below : undefined });
+    else setPos({ left, top: Math.max(floor, a.top - 4 - p.height), maxHeight: p.height > above ? above : undefined });
   }, [anchor, align]);
   useEffect(() => {
     const onDown = (event: PointerEvent) => {
@@ -123,7 +130,7 @@ export function Popover({
     <div
       ref={ref}
       className={`popover ${className}`}
-      style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999 }}
+      style={pos ? { left: pos.left, top: pos.top, maxHeight: pos.maxHeight, overflowY: pos.maxHeight === undefined ? undefined : 'auto' } : { left: -9999, top: -9999 }}
       onMouseDown={(e) => {
         if (!(e.target as HTMLElement).closest('input, select, textarea')) e.preventDefault();
       }}

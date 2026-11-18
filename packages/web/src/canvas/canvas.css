@@ -57,7 +57,9 @@
 
 .page-title {
   display: block;
-  width: min(560px, 100%);
+  /* --view-width is the visible part of the canvas, so the title fits the pane it is shown in. */
+  width: min(560px, 100%, calc(var(--view-width, 560px) - 96px));
+  min-width: 160px;
   padding: 2px 0 6px;
   border: 0;
   border-bottom: 1px solid var(--line-strong);

@@ -10,10 +10,16 @@ import { ExportDialog } from '../exporting/ExportDialog.js';
 import { ImportDialog } from '../importing/ImportDialog.js';
 import { MovePicker } from '../nav/MovePicker.js';
 import { PhoneFormatSheet } from '../phone/FormatBar.js';
+import { ArchiveDialog } from '../board/ArchiveDialog.js';
+import { ShortcutsDialog } from '../board/board-shortcuts.js';
+import { LabelsDialog } from '../board/LabelsDialog.js';
+import { useCurrentBoard } from '../board/live-board.js';
+import { NewBoardDialog } from '../board/NewBoardDialog.js';
 
 export function Dialogs() {
   const { ui } = useServices();
   const dialog = useStore(ui).dialog;
+  const board = useCurrentBoard();
   const close = useCallback(() => patchUi(ui, { dialog: null }), [ui]);
   if (!dialog) return null;
   switch (dialog.kind) {
@@ -32,6 +38,14 @@ export function Dialogs() {
       return <MovePicker notebookId={dialog.notebookId} nodeId={dialog.nodeId} onClose={close} />;
     case 'phone-format':
       return <PhoneFormatSheet onClose={close} />;
+    case 'new-board':
+      return <NewBoardDialog notebookId={dialog.notebookId} onClose={close} />;
+    case 'board-labels':
+      return board ? <LabelsDialog current={board} onClose={close} /> : null;
+    case 'board-archive':
+      return board ? <ArchiveDialog current={board} onClose={close} /> : null;
+    case 'board-shortcuts':
+      return <ShortcutsDialog onClose={close} />;
   }
 }
 

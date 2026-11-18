@@ -8,6 +8,11 @@ function actions(overrides: Partial<AppActions> = {}): AppActions {
   const noop = () => undefined;
   return {
     hasPage: () => true,
+    canPutOnBoard: () => false,
+    putOnBoard: noop,
+    canShowBoardBeside: () => false,
+    boardBesideOpen: () => false,
+    toggleBoardBeside: noop,
     newPage: noop,
     newSection: noop,
     newSectionGroup: noop,

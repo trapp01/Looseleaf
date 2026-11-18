@@ -2,7 +2,8 @@
  * The open page: its doc, its notebook, and the one undo history for it.
  * Undo covers text edits in every container (they arrive with y-prosemirror's
  * origin) and container and stroke changes made through the model (no
- * origin); changes from the server or the replica store are never undone.
+ * origin); changes from the server or the replica store, and board changes
+ * made through `replicaDocAccess`, are never undone.
  * Local edits also bump the page's modified time, at most once a minute: at
  * the first edit, then once more when the minute ends (or the page closes) if
  * edits came in meanwhile.
@@ -20,6 +21,8 @@ export class PageSession {
   readonly history = new Store(0);
   private lastTouch = 0;
   private trailingTouch: ReturnType<typeof setTimeout> | null = null;
+  /** Ids of the page's To Do lines that are in its board's Inbox and show an "Inbox" pill; board/page-inbox.ts fills it. */
+  readonly inbox = new Store<ReadonlySet<string>>(new Set());
   /** The lowest edge of the page's content in canvas px; the canvas supplies it while mounted. */
   contentBottom: () => number = () => 0;
 

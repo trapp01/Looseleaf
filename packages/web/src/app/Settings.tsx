@@ -1,5 +1,5 @@
-/** Settings: connect to a server, change it, disconnect, the sync details, and the desktop app's mirror folder. */
-import { useState } from 'react';
+/** Settings: your name (the actor on board changes), connect to a server, change it, disconnect, the sync details, and the desktop app's mirror folder. */
+import { useState, type FormEvent } from 'react';
 import { Dialog } from './controls.js';
 import { chooseDeviceOnly } from './connection.js';
 import { ServerForm } from './FirstRun.js';
@@ -16,6 +16,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog title="Settings" onClose={onClose}>
+      <NameSection />
       <section className="settings-section">
         <h3>Sync</h3>
         {editing ? (
@@ -66,5 +67,39 @@ export function Settings({ onClose }: { onClose: () => void }) {
       </section>
       {mirror && <MirrorSettings mirror={mirror} />}
     </Dialog>
+  );
+}
+
+/** The name recorded on this device's changes to a board, shown in a card's activity and comments. */
+function NameSection() {
+  const { actor } = useServices();
+  const [name, setName] = useState(actor.get());
+  const [saved, setSaved] = useState(false);
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    actor.set(name.trim());
+    setSaved(true);
+  };
+  return (
+    <form className="settings-section stack" onSubmit={save}>
+      <label className="field">
+        <span>Your name</span>
+        <input
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            setSaved(false);
+          }}
+          placeholder="Shown on your comments and card changes"
+          maxLength={60}
+        />
+      </label>
+      <div className="form-actions start">
+        <button type="submit" className="button" disabled={name.trim() === actor.get()}>
+          Save name
+        </button>
+        {saved && <span className="muted small">Saved</span>}
+      </div>
+    </form>
   );
 }

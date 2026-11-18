@@ -14,6 +14,14 @@ export interface StatusLabel {
 
 export function describeStatus(status: SyncStatus): StatusLabel {
   const error = status.lastError;
+  // An outdated app is refused at every retry, so the brief reconnects between them say nothing new.
+  if (error?.kind === 'outdated' && (status.state === 'offline' || status.state === 'connecting')) {
+    return {
+      tone: 'error',
+      label: 'Update needed',
+      detail: 'This app is older than the server. Reload the page or restart the app to update. Changes are saved on this device and sync after the update.',
+    };
+  }
   switch (status.state) {
     case 'no-server':
       return { tone: 'local', label: 'On this device', detail: 'Notes are kept on this device only.' };

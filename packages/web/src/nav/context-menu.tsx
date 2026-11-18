@@ -17,7 +17,12 @@ export interface MenuItem {
   swatches?: Array<{ name: string; hex: string; selected: boolean; onSelect: () => void }>;
 }
 
-export type MenuEntry = MenuItem | 'separator';
+/** A line of grey text naming the items under it, such as "Make it a card in". */
+export interface MenuHeading {
+  heading: string;
+}
+
+export type MenuEntry = MenuItem | MenuHeading | 'separator';
 
 interface OpenMenu {
   x: number;
@@ -134,6 +139,10 @@ export function ContextMenuHost() {
       {menu.entries.map((entry, i) =>
         entry === 'separator' ? (
           <div key={i} className="menu-separator" role="separator" />
+        ) : 'heading' in entry ? (
+          <div key={i} className="menu-heading" role="presentation">
+            {entry.heading}
+          </div>
         ) : entry.swatches ? (
           <div key={i} className="menu-swatches" role="group" aria-label={entry.label}>
             {entry.swatches.map((s) => (

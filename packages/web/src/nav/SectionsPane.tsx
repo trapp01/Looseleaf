@@ -1,13 +1,15 @@
 /**
- * The sections pane: the notebook switcher on top, the notebook's section
- * groups (with disclosure) and coloured section tabs, and "Add section"
- * pinned at the bottom. Rows rename in place, open a context menu on
- * right-click or long-press, and take drops of sections, groups and pages.
+ * The sections pane: the notebook switcher on top, the "Board" row when the
+ * notebook has a board, the notebook's section groups (with disclosure) and
+ * coloured section tabs, and "Add section" pinned at the bottom. Rows rename
+ * in place, open a context menu on right-click or long-press, and take drops
+ * of sections, groups and pages.
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   AddRegular,
   ArrowDownloadRegular,
+  BoardRegular,
   ArrowMoveRegular,
   ChevronDownRegular,
   ChevronRightRegular,
@@ -34,6 +36,7 @@ import { nextName, useServices } from '../app/services.js';
 import { allSections } from '../app/selection.js';
 import { useStore } from '../app/store.js';
 import { patchUi } from '../app/ui-state.js';
+import { useCurrentBoard } from '../board/live-board.js';
 import { useRowMenu, type MenuEntry } from './context-menu.js';
 import { DRAG_TYPE, dropPosition, indexAmong, type DragPayload, type DropPosition } from './drop.js';
 import { NotebookSwitcher } from './NotebookSwitcher.js';
@@ -47,9 +50,12 @@ type Row =
 
 const EXPANDED_KEY = 'expandedGroups';
 
-export function SectionsPane({ onOpenSection }: { onOpenSection?: () => void }) {
+export function SectionsPane({ onOpenSection, onOpenBoard }: { onOpenSection?: () => void; onOpenBoard?: () => void }) {
   const { selection, notebooks, ui, commands } = useServices();
   const sel = useStore(selection);
+  const view = useStore(ui).view;
+  const board = useCurrentBoard();
+  const hasBoard = board !== null && board.notebookId === sel.notebookId;
   const doc = useStore(notebooks.docs).get(sel.notebookId ?? '') ?? null;
   const tree = useNotebookTree(doc);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(readLocal<string[]>(EXPANDED_KEY, [])));
@@ -124,12 +130,21 @@ export function SectionsPane({ onOpenSection }: { onOpenSection?: () => void }) 
         onDragLeave={(e) => e.target === e.currentTarget && setDrop(null)}
         onDrop={(e) => e.target === e.currentTarget && onDrop(e, null, 'after')}
       >
+        {hasBoard && (
+          <BoardRow
+            selected={view === 'board'}
+            onSelect={() => {
+              patchUi(ui, { view: 'board' });
+              onOpenBoard?.();
+            }}
+          />
+        )}
         {rows.map((row) => (
           <SectionRow
             key={row.entry.id}
             row={row}
             doc={doc}
-            selected={row.kind === 'section' && row.entry.id === sel.sectionId}
+            selected={view !== 'board' && row.kind === 'section' && row.entry.id === sel.sectionId}
             dropHint={drop?.id === row.entry.id ? drop.position : null}
             onSelect={() => {
               if (row.kind === 'group') return toggle(row.entry.id);
@@ -147,6 +162,24 @@ export function SectionsPane({ onOpenSection }: { onOpenSection?: () => void }) 
       <button className="pane-add" onClick={() => commands.run('new-section')}>
         <AddRegular /> Add section
       </button>
+    </div>
+  );
+}
+
+/** The notebook's board, as a row above its sections. */
+function BoardRow({ selected, onSelect }: { selected: boolean; onSelect: () => void }) {
+  return (
+    <div
+      className={`row board-row ${selected ? 'is-selected' : ''}`}
+      role="treeitem"
+      aria-selected={selected}
+      tabIndex={0}
+      style={{ paddingLeft: 12 }}
+      onClick={onSelect}
+      onKeyDown={(e) => e.key === 'Enter' && onSelect()}
+    >
+      <BoardRegular className="row-icon board-row-icon" />
+      <span className="row-label">Board</span>
     </div>
   );
 }
