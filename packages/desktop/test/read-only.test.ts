@@ -56,6 +56,7 @@ describe('OneNote handlers are read-only', () => {
       saveFolder: '/nowhere',
       writeFile,
       mirrorSettingFile: '/nowhere/mirror-folder.json',
+      update: { readyVersion: () => null, restart: () => undefined },
     });
     const host: ShellHost = {
       showSaveDialog: vi.fn(async () => '/nowhere/out'),

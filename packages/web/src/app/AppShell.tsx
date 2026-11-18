@@ -4,7 +4,7 @@
  * It also wires the things that span the app: keeping the selection valid
  * against the live tree, keyboard shortcuts and native menu commands through
  * the command table, recent pages, keeping the search index fresh, opening the
- * page a page address names, and asking
+ * page a page address names, the desktop app's update bar, and asking
  * before the tab closes while changes are not yet stored.
  */
 import { useEffect, useSyncExternalStore } from 'react';
@@ -17,6 +17,7 @@ import { useServices } from './services.js';
 import { useStore } from './store.js';
 import { patchUi } from './ui-state.js';
 import { TitleBar } from './TitleBar.js';
+import { UpdateBar } from './UpdateBar.js';
 import { Ribbon } from '../ribbon/Ribbon.js';
 import { Rail } from '../nav/Rail.js';
 import { NavPanel } from '../nav/NavPanel.js';
@@ -132,6 +133,7 @@ export function AppShell({ persistent }: { persistent: boolean }) {
     <div className={`app ${phone ? 'is-phone' : 'is-desktop'}`} data-shell={shell()?.platform ?? 'browser'}>
       {!phone && <TitleBar />}
       {!phone && notebookList.length > 0 && <Ribbon />}
+      <UpdateBar />
       {!persistent && <div className="banner">This browser isn’t keeping data for this site, so notes last until the tab closes.</div>}
       {body}
       <Dialogs />

@@ -11,6 +11,7 @@ One name per thing. Folders, types, config keys and UI copy use these words.
 | **Page** | One freeform canvas of notes with a title and a created time. | `packages/model` |
 | **Subpage** | A page indented under the page above it. Level 1 or 2; a top page is level 0. | `packages/model` |
 | **Page address** | What another program opens to land on one page: the web client's URL ending in `#page=<pageId>`, or `looseleaf://page/<pageId>` for the desktop app. | `packages/model/src/page-address.ts` |
+| **Update manifest** | `latest.json` on the release CI replaces with every build: the newest Mac build's version, zip name, sha256 and size. The desktop app reads it to update itself. | `packages/desktop/src/updater.ts` |
 | **Node** | One entry in a notebook's tree: a section group, a section or a page. | `packages/model` |
 | **Container** | A box placed on a page at an x/y position. Text containers hold rich text; image and file containers hold a blob. OneNote calls the text kind a "note container". | `packages/model` |
 | **Tag** | A marker on a paragraph: To Do, Important, Question, Remember for later, Definition. | `packages/model` |

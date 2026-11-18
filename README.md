@@ -69,9 +69,11 @@ pnpm --filter @looseleaf/web build
 pnpm --filter @looseleaf/desktop package
 ```
 
-The app is in `packages/desktop/out`. On first run, give it your server's
-address and access token, or keep notes on that computer only and connect
-later. Builds are unsigned; see
+The app is in `packages/desktop/out`. For a Mac with Apple silicon, the
+[latest build](https://github.com/trapp01/Looseleaf/releases/tag/latest) is a
+download, and it updates itself from then on. On first run, give it your
+server's address and access token, or keep notes on that computer only and
+connect later. Builds are unsigned; see
 [packages/desktop/README.md](packages/desktop/README.md).
 
 Settings → **Mirror folder** keeps a copy of every page as a Markdown file in a

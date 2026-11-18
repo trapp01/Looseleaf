@@ -27,6 +27,19 @@ const bridge: ShellBridge = {
   stopMirroring: () => ipcRenderer.invoke(CHANNELS.stopMirroring),
   readMirrorManifest: () => ipcRenderer.invoke(CHANNELS.readMirrorManifest),
   applyMirrorBatch: (batch) => ipcRenderer.invoke(CHANNELS.applyMirrorBatch, batch),
+  onUpdateReady(listener) {
+    if (typeof listener !== 'function') throw new TypeError('onUpdateReady needs a function');
+    const forward = (_event: IpcRendererEvent, version: string) => listener(version);
+    ipcRenderer.on(CHANNELS.updateReadyEvent, forward);
+    // An update that was ready before this page loaded sent its event to no one.
+    void ipcRenderer.invoke(CHANNELS.updateReady).then((version: string | null) => {
+      if (version !== null) listener(version);
+    });
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.updateReadyEvent, forward);
+    };
+  },
+  restartToUpdate: () => ipcRenderer.invoke(CHANNELS.restartToUpdate),
   onMenuCommand(listener) {
     if (typeof listener !== 'function') throw new TypeError('onMenuCommand needs a function');
     const forward = (_event: IpcRendererEvent, command: MenuCommand) => listener(command);

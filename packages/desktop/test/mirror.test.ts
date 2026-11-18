@@ -38,6 +38,7 @@ function shell(options: { userData?: string; picked?: string | null } = {}) {
     saveFolder: '/nowhere',
     writeFile: vi.fn(async () => undefined),
     mirrorSettingFile: settingFile,
+    update: { readyVersion: () => null, restart: () => undefined },
   });
   const call = (channel: (typeof CHANNELS)[keyof typeof CHANNELS], ...args: unknown[]) =>
     handlers[channel as keyof typeof handlers](host, args);

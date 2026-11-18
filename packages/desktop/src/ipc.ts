@@ -31,6 +31,8 @@ export interface HandlerDeps {
   writeFile(path: string, bytes: Uint8Array): Promise<void>;
   /** The JSON file in user data that remembers the mirror folder across launches. */
   mirrorSettingFile: string;
+  /** The in-app updater: the version waiting for the app to quit, or null, and quitting to install it. */
+  update: { readyVersion(): string | null; restart(): void };
 }
 
 export type Handler = (host: ShellHost, args: unknown[]) => Promise<unknown>;
@@ -245,6 +247,16 @@ export function createHandlers(deps: HandlerDeps): Record<InvokeChannel, Handler
       expectArgCount(args, 0, CHANNELS.readMirrorManifest);
       const manifest = await (await mirrorFolder()).readManifest();
       return manifest === null ? null : serializeMirrorManifest(manifest);
+    },
+
+    async [CHANNELS.updateReady](_host, args) {
+      expectArgCount(args, 0, CHANNELS.updateReady);
+      return deps.update.readyVersion();
+    },
+
+    async [CHANNELS.restartToUpdate](_host, args) {
+      expectArgCount(args, 0, CHANNELS.restartToUpdate);
+      if (deps.update.readyVersion() !== null) deps.update.restart();
     },
 
     async [CHANNELS.applyMirrorBatch](_host, args) {

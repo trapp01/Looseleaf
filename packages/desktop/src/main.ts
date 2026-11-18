@@ -2,7 +2,8 @@
  * The Electron main process: one window hosting the built web client from
  * app://looseleaf, the native menu, and the bridge's IPC handlers. It knows
  * nothing about notes. A `looseleaf://page/<pageId>` address from the operating
- * system is passed to the web client as its `#page=` fragment.
+ * system is passed to the web client as its `#page=` fragment. A packaged Mac
+ * build also keeps itself up to date through `updater.ts`.
  *
  * Unpackaged runs read three environment variables: LOOSELEAF_WEB_URL loads a
  * development server instead of the built files, LOOSELEAF_WEB_DIR serves another
@@ -10,7 +11,8 @@
  * `--smoke` hides the window, prints the page's `smoke:` title as one line of JSON
  * and quits; scripts/smoke.ts drives it. Packaged builds ignore all four.
  */
-import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, screen, session, shell, type WebContents } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, screen, session, shell, type WebContents } from 'electron';
+import { execFile, spawn } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { APP_ADDRESS_SCHEME, pageHash, pageIdFromAppAddress } from '@looseleaf/model/page-address';
@@ -18,6 +20,7 @@ import { createHandlers } from './ipc.js';
 import { CHANNELS } from './channels.js';
 import { menuTemplate } from './menu.js';
 import { APP_HOST, APP_SCHEME, APP_URL, contentTypeFor, findWebFile, isAppUrl } from './web-client.js';
+import { bundleOf, Updater, whyNoUpdates } from './updater.js';
 import { loadWindowState, MIN_HEIGHT, MIN_WIDTH, saveWindowState } from './window-state.js';
 
 const dev = !app.isPackaged;
@@ -27,6 +30,10 @@ const webDir = app.isPackaged
   : resolve(process.env.LOOSELEAF_WEB_DIR || join(app.getAppPath(), '../web/dist'));
 const smoke = dev && process.argv.includes('--smoke');
 const SMOKE_TIMEOUT_MS = 30_000;
+const BUNDLE_ID = 'org.looseleaf.desktop';
+/** The release CI replaces on every build of main; it holds `latest.json` and the Mac zip. */
+const UPDATE_RELEASE_URL = 'https://github.com/trapp01/Looseleaf/releases/download/latest';
+const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
 if (dev && process.env.LOOSELEAF_USER_DATA_DIR) app.setPath('userData', resolve(process.env.LOOSELEAF_USER_DATA_DIR));
 app.enableSandbox();
@@ -43,6 +50,8 @@ protocol.registerSchemesAsPrivileged([
 let mainWindow: BrowserWindow | null = null;
 // A page address that arrived before there was a window to show it in. Windows and Linux pass it as an argument.
 let pendingPageId: string | null = pageIdFromArgs(process.argv);
+// Set once this install is known to be one that can update itself.
+let updater: Updater | null = null;
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -66,6 +75,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('activate', () => {
     if (app.isReady() && BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+  app.on('will-quit', () => updater?.applyOnQuit());
   app.on('web-contents-created', (_event, contents) => guardNavigation(contents));
   app.whenReady().then(start).catch((error: unknown) => {
     console.error(error);
@@ -86,6 +96,46 @@ function start(): void {
     ),
   );
   createWindow();
+  startUpdater().catch((error: unknown) => console.error(error));
+}
+
+/** Checks for a newer build now and every few hours, when this install is one that can replace itself. */
+async function startUpdater(): Promise<void> {
+  const bundle = process.platform === 'darwin' ? bundleOf(app.getPath('exe')) : null;
+  const reason = await whyNoUpdates({ packaged: app.isPackaged, platform: process.platform, arch: process.arch, bundle });
+  if (reason !== null || bundle === null) {
+    if (app.isPackaged) console.warn(`In-app updates are off: ${reason}`);
+    return;
+  }
+  const checker = new Updater({
+    currentVersion: app.getVersion(),
+    bundleId: BUNDLE_ID,
+    bundle,
+    updatesDir: join(app.getPath('userData'), 'updates'),
+    releaseUrl: UPDATE_RELEASE_URL,
+    pid: process.pid,
+    fetch: (url) => net.fetch(url, { cache: 'no-store' }),
+    run: (command, args) =>
+      new Promise((done, fail) => {
+        execFile(command, args, (error, stdout, stderr) => (error ? fail(new Error(`${command}: ${stderr || error.message}`)) : done(stdout)));
+      }),
+    spawnDetached: (command, args) => spawn(command, args, { detached: true, stdio: 'ignore' }).unref(),
+    onReady: (version) => mainWindow?.webContents.send(CHANNELS.updateReadyEvent, version),
+    log: (message) => console.log(message),
+  });
+  updater = checker;
+  void checker.check();
+  setInterval(() => void checker.check(), UPDATE_CHECK_INTERVAL_MS);
+}
+
+/** Quits to install the waiting update and reopens the app, unless the window refuses to close. */
+function restartToUpdate(): void {
+  if (!updater) return;
+  const waiting = updater;
+  waiting.reopen = true;
+  app.quit();
+  // A page with changes not yet stored keeps its window open; a later quit by hand does not reopen the app.
+  setTimeout(() => (waiting.reopen = false), 5000);
 }
 
 function serveWebClient(): void {
@@ -130,6 +180,7 @@ function registerIpc(): void {
     saveFolder: app.getPath('downloads'),
     writeFile: (path, bytes) => writeFile(path, bytes),
     mirrorSettingFile: join(app.getPath('userData'), 'mirror-folder.json'),
+    update: { readyVersion: () => updater?.readyVersion ?? null, restart: restartToUpdate },
   });
   for (const [channel, handler] of Object.entries(handlers)) {
     ipcMain.handle(channel, (event, ...args: unknown[]) => {

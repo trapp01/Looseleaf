@@ -361,6 +361,16 @@ the first by setting the window's fragment, so the web client has one way in
 it, and removes the fragment. A page that has not synced yet opens when it
 arrives. An address for a page this replica never receives does nothing.
 
+### Desktop updates
+
+The packaged Mac app replaces itself with newer builds. CI publishes each
+build of `main` as a zip and an update manifest, `latest.json`, on one
+release; `packages/desktop/src/updater.ts` reads the manifest, downloads and
+checks a later build, and swaps it in after the app exits. The web client's
+only part is the bar that says an update is ready (`app/UpdateBar.tsx`),
+reached through two bridge calls. The steps, the checks and the limits of
+trust without an Apple Developer ID are in `packages/desktop/README.md`.
+
 ## Import and export
 
 Importers produce an **import tree** (`packages/model/src/import-tree.ts`).

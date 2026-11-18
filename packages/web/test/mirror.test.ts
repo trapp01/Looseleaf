@@ -79,6 +79,7 @@ function desktopShell(picked: string | null = mkdtempSync(join(tmpdir(), 'loosel
     saveFolder: '/nowhere',
     writeFile: async () => undefined,
     mirrorSettingFile: join(userData, 'mirror-folder.json'),
+    update: { readyVersion: () => null, restart: () => undefined },
   });
   const controls = { failNext: 0, picked, afterApply: async (_batch: MirrorBatch) => undefined as void };
   const host = { showSaveDialog: async () => null, showFolderDialog: async () => controls.picked, printToPdf: async () => new Uint8Array() };

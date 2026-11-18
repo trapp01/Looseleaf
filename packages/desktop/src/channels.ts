@@ -1,6 +1,8 @@
 /**
  * IPC channel names shared by the preload script and the main process. Each
- * bridge method in `ShellBridge` has one channel; `menuCommand` runs main → page.
+ * bridge method in `ShellBridge` has one channel, except `onUpdateReady`,
+ * which asks over `updateReady` and then listens on `updateReadyEvent`.
+ * `menuCommand` and `updateReadyEvent` run main → page.
  */
 export const CHANNELS = {
   saveFile: 'looseleaf:save-file',
@@ -14,7 +16,13 @@ export const CHANNELS = {
   stopMirroring: 'looseleaf:stop-mirroring',
   readMirrorManifest: 'looseleaf:read-mirror-manifest',
   applyMirrorBatch: 'looseleaf:apply-mirror-batch',
+  updateReady: 'looseleaf:update-ready',
+  restartToUpdate: 'looseleaf:restart-to-update',
   menuCommand: 'looseleaf:menu-command',
+  updateReadyEvent: 'looseleaf:update-ready-event',
 } as const;
 
-export type InvokeChannel = Exclude<(typeof CHANNELS)[keyof typeof CHANNELS], typeof CHANNELS.menuCommand>;
+export type InvokeChannel = Exclude<
+  (typeof CHANNELS)[keyof typeof CHANNELS],
+  typeof CHANNELS.menuCommand | typeof CHANNELS.updateReadyEvent
+>;

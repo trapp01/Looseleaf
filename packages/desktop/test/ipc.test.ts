@@ -18,6 +18,7 @@ function setup(options: { home?: string; savePath?: string | null; folder?: stri
     saveFolder: SAVE_FOLDER,
     writeFile,
     mirrorSettingFile: join(mkdtempSync(join(tmpdir(), 'looseleaf-user-data-')), 'mirror-folder.json'),
+    update: { readyVersion: () => null, restart: () => undefined },
   });
   const host = {
     showSaveDialog: vi.fn(async (_defaultPath: string, _filters: Array<{ name: string; extensions: string[] }>) =>

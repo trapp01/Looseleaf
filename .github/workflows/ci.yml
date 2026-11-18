@@ -93,3 +93,42 @@ jobs:
             org.opencontainers.image.source=https://github.com/trapp01/Looseleaf
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  desktop:
+    name: Publish Mac app
+    # Only a push to main that passed every other job replaces the build the desktop app updates itself from.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, e2e, docker]
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: 0.1.${{ github.run_number }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @looseleaf/web build
+      - run: pnpm --filter @looseleaf/desktop run package --mac zip --arm64 -c.extraMetadata.version=$VERSION
+      - name: Write latest.json beside the zip
+        working-directory: packages/desktop/out
+        run: |
+          mv "Looseleaf-$VERSION-arm64-mac.zip" Looseleaf-arm64-mac.zip
+          sha256=$(shasum -a 256 Looseleaf-arm64-mac.zip | cut -d ' ' -f 1)
+          size=$(stat -f %z Looseleaf-arm64-mac.zip)
+          printf '{"version":"%s","file":"Looseleaf-arm64-mac.zip","sha256":"%s","size":%s}\n' "$VERSION" "$sha256" "$size" > latest.json
+          cat latest.json
+      # The app reads releases/download/latest/latest.json; between the delete and the create it finds nothing and tries again later.
+      - name: Replace the "latest" release
+        working-directory: packages/desktop/out
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest Looseleaf-arm64-mac.zip latest.json \
+            --target "$GITHUB_SHA" \
+            --title "Latest build ($VERSION)" \
+            --notes "Built from $GITHUB_SHA. The Mac app (Apple silicon) updates itself from this release. The build is not signed with an Apple Developer ID; packages/desktop/README.md says how to open it the first time."

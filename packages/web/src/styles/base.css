@@ -97,6 +97,14 @@ code {
   text-align: center;
 }
 
+.update-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--accent-soft);
+}
+
 .workspace {
   display: flex;
   flex: 1;

@@ -33,6 +33,7 @@ function installFakeShell(folderName: string): void {
     pickFolder: async () => null,
     listOneNoteFiles: async () => [],
     readOneNoteFile: async () => new Uint8Array(),
+    onUpdateReady: () => () => undefined,
     onMenuCommand: () => () => undefined,
     chooseMirrorFolder: async () => {
       folder = folderName;

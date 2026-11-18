@@ -19,6 +19,7 @@ nothing about notes. The web client talks to it only through
 | `src/menu.ts` | The menu bar template. |
 | `src/window-state.ts` | Remembered window size and position. |
 | `src/mirror-setting.ts` | The remembered mirror folder, in `mirror-folder.json` in user data. |
+| `src/updater.ts` | In-app updates for the Mac build: reading the release's manifest, downloading and checking a newer build, and the script that swaps it in after the app exits. No Electron imports. |
 | `src/channels.ts` | IPC channel names shared by main and preload. |
 | `scripts/smoke.ts` | Launches the shell against a stub page and checks it from inside. |
 | `build/` | The app icon: `icon.svg` is the source, `icon.png` and `icon.icns` are generated from it. |
@@ -98,6 +99,38 @@ installer: choose **More info**, then **Run anyway**.
 The first time Looseleaf looks for OneNote backups on macOS 14 and later, macOS
 asks whether Looseleaf may access data from other apps, because the backups live
 inside OneNote's container.
+
+## Updates
+
+Every push to `main` that passes CI builds the Apple silicon Mac app as version
+`0.1.<CI run number>` and replaces the
+[release tagged `latest`](https://github.com/trapp01/Looseleaf/releases/tag/latest)
+with two files: `Looseleaf-arm64-mac.zip` and `latest.json`, which gives the
+zip's version, name, sha256 and size.
+
+The packaged Mac app reads `latest.json` at launch and every 4 hours. For a
+later version it downloads the zip into `updates/` in its user data folder,
+checks the length and sha256 against the manifest, unpacks it, and checks that
+the app inside has Looseleaf's bundle identifier, the manifest's version and a
+signature that matches its files. The web client then shows "Version 0.1.57 is
+ready." with **Restart to update**. When the app quits, by that button or
+later, a shell script waits for it to exit and moves the new app to where the
+old one was; with the button it reopens the app. Anything that fails is logged
+and leaves the running app as it is.
+
+- An app built on your own computer has version 0.1.0, so it updates to the
+  latest published build. Run it with `pnpm --filter @looseleaf/desktop dev` to
+  stay on your own code; unpackaged runs never update.
+- Updates are off, with a line in the log, when the app's folder is not
+  writable by the user or macOS is running the app from a quarantined download
+  that was never moved in Finder.
+- The build has no Apple Developer ID, so there is no publisher signature to
+  check. An update is trusted because it came from this repository's release
+  over HTTPS and matches the manifest's sha256: whoever can push to `main` or
+  edit the release can ship code to every installed app.
+- macOS ties permissions such as access to OneNote's backups to an ad hoc
+  signature, which is new in every build, so it may ask again after an update.
+- Windows and Linux builds do not update themselves.
 
 ### Signing and notarising
 
