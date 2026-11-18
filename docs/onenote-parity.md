@@ -122,4 +122,5 @@ Status: **built**, **partial** (note says what is missing), **planned**,
 | MCP endpoint for AI assistants (`POST /mcp`) | built | List notebooks and pages, search, read a page, create a page from Markdown, and add Markdown to the end of a page. Nothing already in the notes is changed or removed. Needs the server mirror on. |
 | Import `.one` section files and notebook folders | partial | Ink is not read, and files downloaded from OneDrive use a packaging that is not read yet. See `packages/onenote/README.md`. |
 | Export to `.one` | planned | No open-source writer exists yet. |
+| Kanban board per notebook, with cards that are pages | planned | The doc model is built; what works is tracked in [board-parity.md](board-parity.md). |
 | Mobile apps | planned | A Capacitor shell around `packages/web`. |

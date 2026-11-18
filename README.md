@@ -21,8 +21,11 @@ A free, open-source notebook app laid out like OneNote, that you host yourself.
 - **Readable without Looseleaf.** The server keeps every page as a Markdown
   file in `data/mirror`, updated a few seconds after each edit.
 - **Ask an assistant.** The server answers AI assistants such as Claude Code
-  at an MCP endpoint, so they can search and read your notes, add a page, or
-  add text to the end of a page. They cannot change or remove what is there.
+  at an MCP endpoint, so they can search and read your notes, add pages and
+  text, and keep a notebook's board: make cards, move them, tick their To Do
+  lines and comment on them. They never delete anything, and the one change
+  they make to text already on a page is a To Do line turned into a card,
+  which becomes a link to it.
 - **Web, desktop, phone.** One web client that also runs as a desktop app and
   fits a phone screen. Native mobile apps are planned.
 
@@ -100,7 +103,8 @@ pnpm typecheck
 ```
 
 Start with [docs/architecture.md](docs/architecture.md) and
-[docs/glossary.md](docs/glossary.md).
+[docs/glossary.md](docs/glossary.md); boards and To Do lines are in
+[docs/boards.md](docs/boards.md).
 
 ## Contributing
 

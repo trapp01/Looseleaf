@@ -9,16 +9,17 @@ through and the place backups live. Words in **bold** are defined in
 
 | Package | Owns | Refuses to know |
 | --- | --- | --- |
-| `packages/model` | What a library, notebook, page and container are; the rich-text schema; reading and writing them inside Yjs docs; export to HTML, Markdown, text and JSON; planning a mirror; turning an import tree into docs and Markdown into rich text. | Networking, storage, the DOM, React. |
+| `packages/model` | What a library, notebook, page, container and board are; the rich-text schema; To Do lines and the rule for their ids; reading and writing all of them inside Yjs docs; a board and a card as Markdown; export to HTML, Markdown, text and JSON; planning a mirror; turning an import tree into docs and Markdown into rich text. A board is read and written through `model` only. | Networking, storage, the DOM, React. |
 | `packages/sync` | The wire protocol, the replica store interface, and the client that keeps a replica in step with a server. | What is inside a doc. Doc ids and bytes are opaque. |
-| `packages/server` | The hub: doc and blob storage on disk, the sync endpoint, snapshots, the mirror on disk, the MCP endpoint, serving the web client. | What is inside a doc. Only `mirror.ts` (which reads docs for the mirror) and `notes-writer.ts` (which reads and writes them for the MCP write tools) look inside one, and only through `model`; the hub changes a doc only through a callback it is handed. `mirror-folder.ts` knows a mirror folder on disk and nothing about the server. |
+| `packages/server` | The hub: doc and blob storage on disk, the sync endpoint, snapshots, the mirror on disk, the board repairs and the To Do line index, the MCP endpoint, serving the web client; the one-time import of a Corkboard board. | What is inside a doc. Only `mirror.ts` (which reads docs for the mirror), `notes-writer.ts` (which reads and writes them for the MCP notes tools), `boards.ts` (which finds boards and cards, reads them for the board tools and runs the repairs), `todo-line-index.ts` (the line index), the board tool files (which make the board tools' changes with `model`'s writers) and the `corkboard-*` import files look inside one, and only through `model` (the import also reads Corkboard's own layout in `corkboard-folder.ts`); the hub changes a doc only through a callback it is handed. `mirror-folder.ts` knows a mirror folder on disk and nothing about the server. |
 | `packages/onenote` | Reading Microsoft `.one` files into an import tree. | Yjs, storage, UI. |
 | `packages/web` | The user interface. Runs in a browser, inside the desktop shell, and later inside a mobile shell. | Disk paths, Electron APIs (it talks to the shell through one small bridge). |
 | `packages/desktop` | The Electron shell: window, native menus, PDF output, file dialogs, remembering the mirror folder the person chose and writing a mirror's files into it. | Notes. It hosts `packages/web` unchanged. |
 
 Imports flow one way: `web → model, sync, onenote`; `server → sync, model`
-(`model` from `mirror.ts` and `notes-writer.ts`, plus mirror manifest types in
-`mcp-tools.ts`; the hub and the store never read a doc);
+(`model` from `mirror.ts`, `notes-writer.ts`, `boards.ts`,
+`todo-line-index.ts`, the MCP tool files and the `corkboard-*` import files;
+the hub and the store never read a doc);
 `onenote → model` (types only); `desktop → server, model` (`mirror-folder.ts`
 and `model`'s `mirror-manifest` only; otherwise it loads the built web client).
 `model` and `sync` do not import each other. This is prose
@@ -50,9 +51,12 @@ A **doc** is one Yjs document. Doc ids are strings:
 | `library` | The list of notebooks. |
 | `nb:<notebookId>` | One notebook's tree of nodes: section groups, sections, page entries. |
 | `pg:<pageId>` | One page's content: containers and strokes. |
+| `board:<notebookId>` | A notebook's board: its key, statuses, labels and cards. Keyed by the notebook's id, so a notebook cannot end up with two boards. |
 
 Ids are 21-character nanoid strings. A page doc is keyed by the page id alone,
 so moving a page to another section or notebook never rewrites its content.
+A few ids are derived instead, so that two replicas making the same thing
+while apart make it once: see [boards.md](boards.md).
 
 ### `library`
 
@@ -101,6 +105,13 @@ cycle among groups treats the nodes in the cycle as children of the root.
   'highlighter', color: string, width: number, points: number[] }` where points
   is `[x0, y0, x1, y1, …]`. A stroke is written once. Erasing deletes the entry.
 
+### `board:<notebookId>` and To Do lines
+
+A notebook's board doc, the To Do lines its Inbox and checklists come from,
+card links, the changes that span the board, notebook and page docs, card
+numbers and board keys, how the board tools read and repair boards, and the
+one-time import of a Corkboard board are in [boards.md](boards.md).
+
 ### Rich text
 
 A text container's body is a ProseMirror document stored through
@@ -108,11 +119,16 @@ A text container's body is a ProseMirror document stored through
 exported from `packages/model`; the editor, the exporters and the importers all
 use that list. Block nodes: paragraph, heading 1–6, bullet list, ordered list,
 list item, table, table row, table cell, table header, image (blob reference),
-hard break. Paragraphs and headings carry `textAlign`, `indent` (steps, for a
-paragraph outside a list), `tag` (a **tag** name or null), `checked` (for To Do)
-and `style` (`null | 'quote' | 'code' |
-'citation'`). Marks: bold, italic, underline, strike, subscript, superscript,
+hard break. Inline nodes: text, hard break, and the **card link**
+(`cardLink`, an atom holding `pageId`). Paragraphs and headings carry
+`textAlign`, `indent` (steps, for a paragraph outside a list), `tag` (a
+**tag** name or null), `checked` (for To Do), `style` (`null | 'quote' |
+'code' | 'citation'`), and for a **To Do line** `lineId` (a nanoid),
+`taggedAt` (epoch ms) and `inbox` (`false` once someone chose "Keep it as a
+line"). Marks: bold, italic, underline, strike, subscript, superscript,
 highlight (colour), text style (colour, font family, font size in pt), link.
+How a card link shows and exports, and the rule for a To Do line's id, are in
+[boards.md](boards.md).
 
 ### Ordering
 
@@ -139,13 +155,29 @@ Two tabs on one replica store each run their own client. A handshake applies
 the store's contents to the open doc first, so one tab sends what another tab
 stored.
 
+Tabs of different builds never share a replica store. The IndexedDB
+database's version is the content version (see Wire protocol; builds without
+one open version 1), and the name of the channel tabs use to show each
+other's edits carries it too. A tab of a newer build that opens the database
+closes every older build's connection, and an older build cannot open it
+again. A tab of an older build that is already open neither receives the
+newer tab's edits nor has its own shown there; it can no longer store
+anything, so what is typed in it from then on stays in that tab, its sync
+status says changes are not saved on this device (this build's tabs add
+"Reload this tab to keep editing"), and reloading it loads the newer build.
+A tab of an older build opened afterwards finds no store it can open and
+starts with notes in memory only and no server. Tabs of one build share the
+database and the channel as before.
+
 ### Wire protocol
 
 One WebSocket per client at `/sync`. All docs share it.
 
-1. Client sends text frame `{"t":"hello","token":"…","replica":"<id>","v":1}`.
+1. Client sends text frame
+   `{"t":"hello","token":"…","replica":"<id>","v":1,"content":2}`.
 2. Server answers `{"t":"welcome","docs":["library","nb:…","pg:…", …]}` listing
-   every doc id it holds, or closes with code 4401 on a bad token.
+   every doc id it holds, or closes with code 4401 on a bad token, or refuses a
+   client whose content version is too old (below).
 3. For every doc id known to either side, both sides run the Yjs handshake:
    send your state vector, receive the other side's missing operations. The
    client starts with `library`, then notebooks, then the open page, then the
@@ -154,6 +186,23 @@ One WebSocket per client at `/sync`. All docs share it.
    happens. The server persists an update before relaying it to the other
    connected clients. An update that waits on content the receiver lacks is
    stored whole, so the waiting part survives a restart.
+
+`v` is the protocol version, the layout of these frames; a server refuses
+any other with 4400. `content` is the content version (`CONTENT_VERSION` in
+`protocol.ts`): which nodes, marks and attributes the client's editor keeps.
+An editor that meets content its schema lacks deletes or strips it, and that
+deletion syncs to every device, so the version is raised whenever docs gain a
+node, mark or attribute, and the server refuses a client below its own before
+any doc is exchanged, with the close reason "This app is older than the
+server. Reload the page or restart the app to update." A hello with a
+`content` field gets close code 4426; one without (builds older than the
+field) gets 4400, the one code those builds show with its reason. A refused
+client keeps every edit in its replica store, shows that sentence in the sync
+status, and tries again at its slowest reconnect pace, so an app that is
+updated, or a server that is rolled back, syncs again. A newer client meets an
+older server as usual: such a server reads `v` and ignores `content`, and so
+refuses no one. The rule therefore protects content once the server runs the
+build that raised the version; update the server before the apps.
 
 A doc that fails on either side (unreadable, id too long to store) fails alone:
 it is listed in the sync status and every other doc keeps syncing.
@@ -207,6 +256,7 @@ data/
   blobs/<aa>/<sha256>
   snapshots/<yyyy-mm-dd>/  dated copies of docs/ and blobs/ (blobs hard-linked)
   mirror/               the notes as Markdown; see Mirror
+  corkboard-import.json  the state of a Corkboard import; see boards.md
 ```
 
 Doc ids are percent-encoded for the folder name. A log record whose length or
@@ -311,19 +361,58 @@ disk; the hub only reports which doc id changed. Snapshots do not copy
 
 `POST /mcp` on the server speaks the Model Context Protocol (streamable HTTP,
 stateless, JSON responses; `GET` and `DELETE` answer 405) so an AI assistant
-on the same network can search, read and add to the notes. It takes the same
-bearer token as the blob routes. With the mirror off the route answers 404.
-The protocol is in `mcp.ts`, the tools in `mcp-tools.ts`; the runtime uses no
-MCP SDK.
+on the same network can search, read and add to the notes and work the
+boards. It takes the same bearer token as the blob routes. The protocol is in
+`mcp.ts`; `mcp-tools.ts` holds the tool list and checks each call's arguments
+against the tool's schema; the notes tools are in `mcp-notes-tools.ts` and
+the board tools in `mcp-board-read-tools.ts` and `mcp-board-write-tools.ts`.
+The runtime uses no MCP SDK. With the mirror off (`LOOSELEAF_MIRROR=off`) the
+notes read tools answer, with `isError`, that they need it; every other tool
+works, since none of them reads the mirror. How an agent is meant to use it is in [agents.md](agents.md).
 
-The read tools serve the server's mirror and nothing else: they list
+One endpoint serves the notes tools and the board tools. The board tools have
+the same names as Corkboard's, so instructions that name one only change the
+server prefix:
+
+| Tool | What it does |
+| --- | --- |
+| `list_notebooks`, `list_pages`, `search_notes`, `read_page` | Read the notes from the mirror, as below. `read_page` takes a page id, a page address or a card ref. |
+| `create_page`, `append_to_page` | Add to the notes, as below. `append_to_page` takes a page id, a page address or a card ref. |
+| `list_boards` | Every board: its key, its notebook's name, and its cards per status. |
+| `get_board` | One board, named by key or notebook name: the Inbox lane, then each status with its cards (`renderBoard`). Narrowed to one status or label, the Inbox is left out. |
+| `search_cards` | Cards by words (title, page text, labels, comments, links), status, label and due day, across boards or on one. |
+| `get_card` | One card by ref or page id: its board fields and its page as Markdown, with its To Do lines as the checklist, each with its line id (`renderCard`). The id it prints is the page id. |
+| `create_card` | Makes the page and the card (`addCard`); a description becomes the page's first text. With a line id it turns that Inbox line into the card (`promoteTodoLine`). |
+| `update_card` | Title (the page title), due day, labels (`labelCard`). No description: text is added with `append_to_page`. |
+| `update_checklist` | Ticks and unticks To Do lines on the card's page by line id or exact text, and adds new ones. It never removes a line or changes its text. |
+| `move_card`, `add_comment`, `add_link`, `archive_card` | As named; archiving is the one way off the board. |
+| `create_status`, `create_label` | Add a status (with a kind) or a label (with an optional label tie) to a board. |
+| `create_board` | Makes the board on a notebook. Fails with a sentence when the notebook has one. |
+
+No tool deletes a card, a status or a board, and none removes a To Do line,
+so nothing an agent does on a board is unrecoverable. Callers name things the
+way a person would: a board by key or notebook name, a card by ref, a status
+by name or by kind, a label by name. A mistake the caller can fix is a result
+with `isError` set and a sentence that says what to do next.
+
+The `initialize` reply carries instructions: write what outlasts a task to a
+page without being asked; before starting a task, find or make its card and
+move it to a `doing` status; record progress on the card (tick its To Do
+lines, comment findings and decisions, link branches and pull requests); when
+stopping, comment what was done and what is left. The card is its page, so
+longer notes go on the page with `append_to_page`, which takes the card ref.
+
+How the board tools find, read and repair boards is in
+[boards.md](boards.md#board-tools).
+
+The notes read tools serve the server's mirror and nothing else: they list
 notebooks and pages from the mirror manifest (so a section with no pages is
 not listed), search the mirror's Markdown files on each call, and return a
 page's file. Files are read only at paths the manifest lists, through
 `MirrorFolder.readText`, which refuses a path that resolves outside the
 folder.
 
-The write tools never touch the mirror. `create_page` adds a top-level page
+The notes write tools never touch the mirror. `create_page` adds a top-level page
 at the end of a section, with its Markdown in one text container;
 `append_to_page` adds Markdown after the end of the page's last text
 container in reading order (or, on a page with none, in a new text container
@@ -343,7 +432,9 @@ The web client is one React app. Served by the server it connects to its own
 origin. In the desktop shell it asks for a server address and token, or runs
 with no server. Layout follows OneNote: ribbon on top, notebook and section
 list, page list, canvas. Under 768 px wide the three panes become a drill-down:
-notebooks and sections, then pages, then the page.
+notebooks and sections, then pages, then the page. A notebook with a board
+shows a Board row above its sections that opens the board in place of the
+pages pane and canvas; [ui.md](ui.md) has the board screens.
 
 The desktop shell loads the built web client from an `app://` origin, which is
 a secure context with stable IndexedDB storage. A mobile shell (Capacitor) can
@@ -376,7 +467,10 @@ trust without an Apple Developer ID are in `packages/desktop/README.md`.
 Importers produce an **import tree** (`packages/model/src/import-tree.ts`).
 `model` turns an import tree into docs. The first importer reads `.one` files,
 implemented from Microsoft's published [MS-ONESTORE] and [MS-ONE]
-specifications.
+specifications. A Corkboard board is imported once into a notebook's board;
+see [boards.md](boards.md#importing-a-corkboard-board).
+
+### Export
 
 Export works per page, section, notebook or library: HTML with embedded
 images, Markdown with an assets folder, plain text, and a lossless JSON form.
