@@ -100,6 +100,18 @@ The first time Looseleaf looks for OneNote backups on macOS 14 and later, macOS
 asks whether Looseleaf may access data from other apps, because the backups live
 inside OneNote's container.
 
+### Signing and notarising
+
+- **macOS**: an Apple Developer Program membership and a "Developer ID
+  Application" certificate, in the keychain or given as `CSC_LINK` and
+  `CSC_KEY_PASSWORD`. In `electron-builder.config.cjs` remove `identity: '-'` and
+  set `hardenedRuntime: true`. For notarisation set either `APPLE_ID`,
+  `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`, or an App Store Connect API
+  key (`APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`); electron-builder
+  then notarises and staples the app and dmg.
+- **Windows**: a code-signing certificate (`CSC_LINK` / `CSC_KEY_PASSWORD`) or
+  Azure Trusted Signing (`win.azureSignOptions`).
+
 ## Updates
 
 Every push to `main` that passes CI builds the Apple silicon Mac app as version
@@ -131,18 +143,6 @@ and leaves the running app as it is.
 - macOS ties permissions such as access to OneNote's backups to an ad hoc
   signature, which is new in every build, so it may ask again after an update.
 - Windows and Linux builds do not update themselves.
-
-### Signing and notarising
-
-- **macOS**: an Apple Developer Program membership and a "Developer ID
-  Application" certificate, in the keychain or given as `CSC_LINK` and
-  `CSC_KEY_PASSWORD`. In `electron-builder.config.cjs` remove `identity: '-'` and
-  set `hardenedRuntime: true`. For notarisation set either `APPLE_ID`,
-  `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`, or an App Store Connect API
-  key (`APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`); electron-builder
-  then notarises and staples the app and dmg.
-- **Windows**: a code-signing certificate (`CSC_LINK` / `CSC_KEY_PASSWORD`) or
-  Azure Trusted Signing (`win.azureSignOptions`).
 
 ## Mirror folder
 
