@@ -15,5 +15,9 @@ export default defineConfig({
     viewport: { width: 1440, height: 900 },
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  // The performance file measures typing latency, so it runs after the rest, with no other test taking the processor.
+  projects: [
+    { name: 'chromium', use: { browserName: 'chromium' }, testIgnore: /performance\.spec\.ts$/ },
+    { name: 'performance', use: { browserName: 'chromium' }, testMatch: /performance\.spec\.ts$/, dependencies: ['chromium'] },
+  ],
 });
