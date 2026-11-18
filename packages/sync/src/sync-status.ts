@@ -26,6 +26,12 @@ export type SyncErrorKind =
   | 'unreachable'
   /** The server sent something this client cannot read, or refused the protocol version. */
   | 'protocol'
+  /**
+   * The server holds content this build could damage and refused it. Local
+   * edits stay in the replica store; the client retries at its slowest pace
+   * until the app is updated.
+   */
+  | 'outdated'
   /** A blob upload or download failed. */
   | 'blob'
   /** The replica store failed a read or write. */

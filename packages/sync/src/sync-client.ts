@@ -8,7 +8,7 @@ import type * as Y from 'yjs';
 import { BlobSync, type ServerAccess } from './blobs.js';
 import { IndexedDbStore } from './indexeddb-store.js';
 import { Listeners } from './listeners.js';
-import { CLOSE_BAD_TOKEN, CLOSE_PROTOCOL_ERROR, normalizeServerAddress, socketUrl } from './protocol.js';
+import { CLIENT_TOO_OLD_REASON, CLOSE_BAD_TOKEN, CLOSE_CLIENT_TOO_OLD, CLOSE_PROTOCOL_ERROR, CONTENT_VERSION, normalizeServerAddress, socketUrl } from './protocol.js';
 import { Replica } from './replica.js';
 import type { ClientStore } from './replica-store.js';
 import { Session } from './session.js';
@@ -39,8 +39,8 @@ export interface SyncClientOptions {
   /**
    * The BroadcastChannel name tabs sharing this store use to show each
    * other's edits at once. Defaults to one derived from the IndexedDB
-   * database name for an IndexedDbStore and to none otherwise; null turns it
-   * off. Ignored where BroadcastChannel does not exist.
+   * database name and the content version for an IndexedDbStore and to none
+   * otherwise; null turns it off. Ignored where BroadcastChannel does not exist.
    */
   tabChannel?: string | null;
   /** How long a doc's handshake may go unanswered before it is recorded as failed. */
@@ -267,7 +267,8 @@ export class SyncClient {
   /** Opens the channel tabs sharing the store use for each other's stored edits, when the environment has one. */
   private openTabChannel(): TabChannel | null {
     const { store, tabChannel } = this.options;
-    const name = tabChannel !== undefined ? tabChannel : store instanceof IndexedDbStore ? `looseleaf:${store.name}` : null;
+    // Named for the content version, so a tab of an older build never shows this tab's edits, nor this tab its.
+    const name = tabChannel !== undefined ? tabChannel : store instanceof IndexedDbStore ? `looseleaf:${store.name}:content-${CONTENT_VERSION}` : null;
     const Channel = (globalThis as unknown as { BroadcastChannel?: new (name: string) => TabChannel }).BroadcastChannel;
     if (name === null || Channel === undefined) return null;
     const channel = new Channel(name);
@@ -352,6 +353,12 @@ export class SyncClient {
       this.setError('bad-token', `The server at ${access.address} refused the access token`);
       return;
     }
+    if (code === CLOSE_CLIENT_TOO_OLD) {
+      // Retrying cannot succeed until this app updates, unless the server is rolled back; try at the slowest pace.
+      this.setError('outdated', CLIENT_TOO_OLD_REASON);
+      this.scheduleReconnect(this.delays.max);
+      return;
+    }
     if (code === CLOSE_PROTOCOL_ERROR) {
       this.setError('protocol', `The server at ${access.address} closed the connection: ${reason}`);
     } else if (opened) {
@@ -387,9 +394,8 @@ export class SyncClient {
     this.updateStatus();
   }
 
-  private scheduleReconnect(): void {
+  private scheduleReconnect(bound = Math.min(this.delays.max, this.delays.min * 2 ** this.attempt)): void {
     if (this.closed || this.access === null || this.retryTimer !== null) return;
-    const bound = Math.min(this.delays.max, this.delays.min * 2 ** this.attempt);
     const delay = bound / 2 + (Math.random() * bound) / 2;
     this.attempt += 1;
     this.nextRetryAt = Date.now() + delay;

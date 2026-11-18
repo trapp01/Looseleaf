@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import {
+  CLIENT_TOO_OLD_REASON,
+  CLOSE_CLIENT_TOO_OLD,
+  CLOSE_PROTOCOL_ERROR,
+  CONTENT_VERSION,
+  contentRefusal,
   decodeFrame,
   decodeHello,
   decodeWelcome,
@@ -44,12 +49,28 @@ describe('binary frames', () => {
 
 describe('text frames', () => {
   it('round-trips hello and welcome in the documented shape', () => {
-    expect(JSON.parse(encodeHello('tok', 'r1'))).toEqual({ t: 'hello', token: 'tok', replica: 'r1', v: 1 });
-    expect(decodeHello(encodeHello('tok', 'r1'))).toEqual({ t: 'hello', token: 'tok', replica: 'r1', v: 1 });
+    const hello = { t: 'hello', token: 'tok', replica: 'r1', v: 1, content: CONTENT_VERSION };
+    expect(JSON.parse(encodeHello('tok', 'r1'))).toEqual(hello);
+    expect(decodeHello(encodeHello('tok', 'r1'))).toEqual(hello);
+    expect(decodeHello('{"t":"hello","token":"tok","replica":"r1","v":1}')).toEqual({ t: 'hello', token: 'tok', replica: 'r1', v: 1 });
     expect(decodeWelcome(encodeWelcome(['library', 'pg:a']))).toEqual({ t: 'welcome', docs: ['library', 'pg:a'] });
   });
 
+  it('keeps v at 1, the only version servers without a content version accept', () => {
+    expect(JSON.parse(encodeHello('tok', 'r1')).v).toBe(1);
+  });
+
+  it('refuses a hello below the content version, with the code each build understands', () => {
+    const hello = { t: 'hello' as const, token: 'tok', replica: 'r1', v: 1 };
+    expect(contentRefusal({ ...hello, content: CONTENT_VERSION })).toBeNull();
+    expect(contentRefusal({ ...hello, content: CONTENT_VERSION + 1 })).toBeNull();
+    expect(contentRefusal({ ...hello, content: CONTENT_VERSION - 1 })).toEqual({ code: CLOSE_CLIENT_TOO_OLD, reason: CLIENT_TOO_OLD_REASON });
+    expect(contentRefusal(hello)).toEqual({ code: CLOSE_PROTOCOL_ERROR, reason: CLIENT_TOO_OLD_REASON });
+    expect(new TextEncoder().encode(CLIENT_TOO_OLD_REASON).length).toBeLessThanOrEqual(120);
+  });
+
   it('rejects anything else', () => {
+    expect(() => decodeHello('{"t":"hello","token":"tok","replica":"r1","v":1,"content":"2"}')).toThrow(/Expected a hello/);
     expect(() => decodeHello('{"t":"welcome","docs":[]}')).toThrow(/Expected a hello/);
     expect(() => decodeHello('not json')).toThrow(/not JSON/);
     expect(() => decodeWelcome('{"t":"welcome","docs":[1]}')).toThrow(/Expected a welcome/);

@@ -1,4 +1,7 @@
+import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
+import { openIndexedDbStore, type IdbFactory } from '../src/indexeddb-store.js';
+import { CLIENT_TOO_OLD_REASON, CLOSE_CLIENT_TOO_OLD, CONTENT_VERSION } from '../src/protocol.js';
 import { COMPACT_AFTER_UPDATES } from '../src/replica.js';
 import { MemoryStore } from '../src/replica-store.js';
 import { SyncClient } from '../src/sync-client.js';
@@ -16,6 +19,27 @@ class UnreachableSocket implements SocketLike {
   }
   send(): void {
     throw new Error('not connected');
+  }
+  close(): void {}
+}
+
+/** A socket to a server whose content version is above this build's: it opens, takes the hello and refuses it. */
+class RefusingSocket implements SocketLike {
+  static opened = 0;
+  static hellos: string[] = [];
+  binaryType = '';
+  onopen: SocketLike['onopen'] = null;
+  onmessage: SocketLike['onmessage'] = null;
+  onclose: SocketLike['onclose'] = null;
+  onerror: SocketLike['onerror'] = null;
+  constructor(readonly url: string) {
+    RefusingSocket.opened += 1;
+    setTimeout(() => this.onopen?.({}), 1);
+  }
+  send(data: string | Uint8Array): void {
+    if (typeof data !== 'string') throw new Error('binary frame before the welcome');
+    RefusingSocket.hellos.push(data);
+    setTimeout(() => this.onclose?.({ code: CLOSE_CLIENT_TOO_OLD, reason: CLIENT_TOO_OLD_REASON }), 1);
   }
   close(): void {}
 }
@@ -179,5 +203,60 @@ describe('SyncClient with an unreachable server', () => {
     await restarted.disconnect();
     expect(restarted.status.state).toBe('no-server');
     await restarted.close();
+  });
+});
+
+describe('SyncClient refused by a newer server', () => {
+  it('reports outdated, keeps local edits in the store and retries only at the slowest pace', async () => {
+    const store = new MemoryStore();
+    const client = await SyncClient.create({
+      store,
+      WebSocket: RefusingSocket as unknown as SocketConstructor,
+      fetch: noFetch,
+      reconnectDelayMs: { min: 5, max: 400 },
+    });
+    const doc = await client.openDoc('pg:a');
+    doc.getText('t').insert(0, 'kept here');
+    await client.connect({ url: 'http://nas:8421', token: 'secret' });
+    await until(() => client.status.lastError?.kind === 'outdated');
+    expect(client.status.state).toBe('offline');
+    expect(client.status.lastError?.message).toBe(CLIENT_TOO_OLD_REASON);
+    expect(JSON.parse(RefusingSocket.hellos[0]!).content).toBe(CONTENT_VERSION);
+    // With a 5 ms minimum, ordinary backoff would have tried several times by now.
+    expect(client.status.nextRetryAt! - Date.now()).toBeGreaterThan(150);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(RefusingSocket.opened).toBe(1);
+    await client.flush();
+    expect((await store.readUpdates('pg:a')).length).toBeGreaterThan(0);
+    expect(client.status.server).toBe('http://nas:8421');
+    await client.close();
+  });
+});
+
+describe('tabs sharing a store', () => {
+  const textOf = async (client: SyncClient) => (await client.openDoc('pg:a')).getText('t').toString();
+
+  it('show each other’s edits in the same build, and never a tab’s of another build', async () => {
+    const factory = new IDBFactory() as unknown as IdbFactory;
+    const name = 'looseleaf-tabs';
+    const open = async (options: { tabChannel?: string } = {}) =>
+      SyncClient.create({ ...options, store: await openIndexedDbStore(name, factory), WebSocket: UnreachableSocket as unknown as SocketConstructor, fetch: noFetch });
+    const first = await open();
+    const second = await open();
+    // A tab of a build older than the content version, on the channel name those builds use.
+    const older = await SyncClient.create({ store: new MemoryStore(), tabChannel: `looseleaf:${name}`, WebSocket: UnreachableSocket as unknown as SocketConstructor, fetch: noFetch });
+    for (const client of [first, second, older]) await client.openDoc('pg:a');
+
+    const secondDoc = await second.openDoc('pg:a');
+    (await first.openDoc('pg:a')).getText('t').insert(0, 'from this build');
+    await until(() => secondDoc.getText('t').toString() === 'from this build');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await textOf(older)).toBe('');
+
+    (await older.openDoc('pg:a')).getText('t').insert(0, 'from an older build ');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await textOf(first)).toBe('from this build');
+    expect(await textOf(second)).toBe('from this build');
+    for (const client of [first, second, older]) await client.close();
   });
 });

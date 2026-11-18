@@ -5,10 +5,19 @@
  * maps hash → bytes, `settings` maps key → string. Writes commit with strict
  * durability, so a resolved append has reached the device's disk.
  */
+import { CONTENT_VERSION } from './protocol.js';
 import { blobHash, mergeDocUpdates, type ClientStore } from './replica-store.js';
 
 export const DEFAULT_DATABASE_NAME = 'looseleaf';
-const DATABASE_VERSION = 1;
+/**
+ * The database version is the content version (builds without one opened
+ * version 1). A tab that opens a higher version closes every older build's
+ * connection, and an older build cannot open it again, so no tab of an older
+ * build reads content its editor would strip. Every store is kept as it is.
+ */
+export const DATABASE_VERSION = CONTENT_VERSION;
+/** What a store's calls reject with once a tab of a newer build has opened the database. */
+export const NEWER_BUILD_MESSAGE = 'A tab running a newer Looseleaf build has opened the notes on this device. Reload this tab to keep editing.';
 const UPDATES = 'updates';
 const BLOBS = 'blobs';
 const SETTINGS = 'settings';
@@ -23,15 +32,17 @@ export async function openIndexedDbStore(
     throw new Error('IndexedDB is not available in this environment; pass an IDBFactory to openIndexedDbStore');
   }
   const request = factory.open(name, DATABASE_VERSION);
-  request.onupgradeneeded = () => {
+  request.onupgradeneeded = (event) => {
+    if (event.oldVersion >= 1) return;
     const db = request.result;
     const updates = db.createObjectStore(UPDATES, { autoIncrement: true });
     updates.createIndex(BY_DOC, 'docId');
     db.createObjectStore(BLOBS);
     db.createObjectStore(SETTINGS);
   };
+  // Every build closes its connection when asked, so the open goes on once the other tab has.
   request.onblocked = () => {
-    console.warn(`IndexedDB "${name}" is waiting for another tab to close its older version`);
+    console.warn(`IndexedDB "${name}" is waiting for a tab of an older build to close it`);
   };
   const db = await settle(request, `open IndexedDB "${name}"`);
   return new IndexedDbStore(db, name);
@@ -43,13 +54,18 @@ interface UpdateRecord {
 }
 
 export class IndexedDbStore implements ClientStore {
+  private replaced = false;
+
   constructor(
     private readonly db: IdbDatabase,
     /** The IndexedDB database name. */
     readonly name: string,
   ) {
-    // Another tab upgrading the schema needs this connection gone.
-    db.onversionchange = () => db.close();
+    // A tab of a newer build opening the database needs this connection gone.
+    db.onversionchange = () => {
+      this.replaced = true;
+      db.close();
+    };
   }
 
   close(): void {
@@ -179,6 +195,10 @@ export class IndexedDbStore implements ClientStore {
     body: (tx: IdbTransaction, result: (value: T) => void) => void,
   ): Promise<T | undefined> {
     return new Promise((resolve, reject) => {
+      if (this.replaced) {
+        reject(new Error(NEWER_BUILD_MESSAGE));
+        return;
+      }
       let value: T | undefined;
       const tx = this.db.transaction(stores, mode, { durability: mode === 'readwrite' ? 'strict' : 'default' });
       const fail = () => reject(new Error(`Could not ${what} in IndexedDB "${this.name}": ${String(tx.error)}`));
@@ -218,7 +238,7 @@ interface IdbRequest<T> {
 }
 
 interface IdbOpenRequest extends IdbRequest<IdbDatabase> {
-  onupgradeneeded: (() => void) | null;
+  onupgradeneeded: ((event: { oldVersion: number }) => void) | null;
   onblocked: (() => void) | null;
 }
 

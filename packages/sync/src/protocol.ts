@@ -9,6 +9,14 @@ import * as decoding from 'lib0/decoding';
 
 export const PROTOCOL_VERSION = 1;
 
+/**
+ * The doc content a client can hold without damaging it: the rich-text nodes
+ * and attributes its schema keeps. Raise it whenever docs gain something an
+ * older client's editor would delete or strip, since those deletions sync to
+ * every device. The server refuses a client below its own content version.
+ */
+export const CONTENT_VERSION = 2;
+
 /** Paths the server answers on. The client joins them onto the server address. */
 export const SYNC_PATH = '/sync';
 export const INFO_PATH = '/api/info';
@@ -19,6 +27,10 @@ export const BLOBS_PATH = '/api/blobs';
 export const CLOSE_BAD_TOKEN = 4401;
 /** The server closes with this code on a malformed frame or an unsupported protocol version. */
 export const CLOSE_PROTOCOL_ERROR = 4400;
+/** The server closes with this code when the hello's content version is below the server's. */
+export const CLOSE_CLIENT_TOO_OLD = 4426;
+/** The close reason sent with a content-version refusal. A close reason holds at most 123 bytes. */
+export const CLIENT_TOO_OLD_REASON = 'This app is older than the server. Reload the page or restart the app to update.';
 
 export enum FrameType {
   /** The sender's state vector. The receiver replies with a Diff. */
@@ -40,6 +52,8 @@ export interface Hello {
   token: string;
   replica: string;
   v: number;
+  /** The client's content version (see CONTENT_VERSION); builds older than the field send none. */
+  content?: number;
 }
 
 export interface Welcome {
@@ -119,22 +133,37 @@ export function decodeFrame(bytes: Uint8Array): Frame {
 }
 
 export function encodeHello(token: string, replica: string): string {
-  const hello: Hello = { t: 'hello', token, replica, v: PROTOCOL_VERSION };
+  const hello: Hello = { t: 'hello', token, replica, v: PROTOCOL_VERSION, content: CONTENT_VERSION };
   return JSON.stringify(hello);
 }
 
-/** Throws when the text is not a hello; the version is returned as sent so the caller can refuse it. */
+/** Throws when the text is not a hello; the versions are returned as sent so the caller can refuse them. */
 export function decodeHello(text: string): Hello {
   const value = parseJson(text, 'hello');
   if (
     value.t !== 'hello' ||
     typeof value.token !== 'string' ||
     typeof value.replica !== 'string' ||
-    typeof value.v !== 'number'
+    typeof value.v !== 'number' ||
+    (value.content !== undefined && typeof value.content !== 'number')
   ) {
     throw new Error(`Expected a hello frame, got ${text.slice(0, 200)}`);
   }
-  return { t: 'hello', token: value.token, replica: value.replica, v: value.v };
+  const hello: Hello = { t: 'hello', token: value.token, replica: value.replica, v: value.v };
+  if (typeof value.content === 'number') hello.content = value.content;
+  return hello;
+}
+
+/**
+ * How the server refuses a hello whose content version is below its own, or
+ * null when the client may sync. Builds that send no content version know
+ * only CLOSE_PROTOCOL_ERROR, which they show with its reason and retry with
+ * backoff, so they get that code; later builds get CLOSE_CLIENT_TOO_OLD.
+ */
+export function contentRefusal(hello: Hello): { code: number; reason: string } | null {
+  if (hello.content !== undefined && hello.content >= CONTENT_VERSION) return null;
+  const code = hello.content === undefined ? CLOSE_PROTOCOL_ERROR : CLOSE_CLIENT_TOO_OLD;
+  return { code, reason: CLIENT_TOO_OLD_REASON };
 }
 
 export function encodeWelcome(docs: string[]): string {
