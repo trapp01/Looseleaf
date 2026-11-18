@@ -3,7 +3,10 @@
  * separate asset files. To Do tags become task list items; other tags become
  * a `[Label]` marker. Tables become GFM tables, with the first row as header.
  * Paragraph indent is dropped: leading spaces would turn it into a code block.
+ * A card link becomes a link to the desktop app's page address, showing the
+ * page title when the export has it.
  */
+import { appPageAddress } from '../page-address.js';
 import { TAG_LABELS, inlineText, safeHref, type JSONContent, type TagName } from '../rich-text.js';
 import type { PageForExport } from './bundle.js';
 import { assetFileName } from './names.js';
@@ -27,11 +30,15 @@ export function pageToMarkdown(page: PageForExport, assetDir: string): MarkdownP
     assets.set(file, bytes);
     return `${assetDir}/${file}`;
   };
+  const links: Links = {
+    asset,
+    cardLink: (pageId) => `[${escapeInline(cardLinkText(page, pageId))}](${encodeHref(appPageAddress(pageId))})`,
+  };
   const created = new Date(page.createdAt).toISOString();
   const parts = [`# ${escapeInline(page.title || 'Untitled page')}`, `Created: ${created}`];
   for (const c of page.snapshot.containers) {
     if (c.kind === 'text') {
-      const md = blocksToMarkdown(c.body.content ?? [], asset);
+      const md = blocksToMarkdown(c.body.content ?? [], links);
       if (md.trim()) parts.push(md);
     } else if (c.kind === 'image') {
       const href = asset(c.blob, c.mime, c.name);
@@ -46,7 +53,20 @@ export function pageToMarkdown(page: PageForExport, assetDir: string): MarkdownP
 
 type AssetLink = (hash: string, mime: string, name: string) => string | null;
 
-function blocksToMarkdown(blocks: JSONContent[], asset: AssetLink): string {
+/** How the blocks of one page write its asset links and card links. */
+interface Links {
+  asset: AssetLink;
+  cardLink: (pageId: string) => string;
+}
+
+/** The text a card link shows in an export: the page title, or a stand-in when the export does not know the page. */
+export function cardLinkText(page: { pageTitles?: ReadonlyMap<string, string> }, pageId: string): string {
+  const title = page.pageTitles?.get(pageId);
+  return title === undefined ? 'Linked card' : title || 'Untitled page';
+}
+
+
+function blocksToMarkdown(blocks: JSONContent[], links: Links): string {
   const out: string[] = [];
   let codeLines: string[] | null = null;
   const flushCode = () => {
@@ -59,18 +79,18 @@ function blocksToMarkdown(blocks: JSONContent[], asset: AssetLink): string {
       continue;
     }
     flushCode();
-    out.push(blockToMarkdown(block, asset));
+    out.push(blockToMarkdown(block, links));
   }
   flushCode();
   return out.filter((b) => b !== '').join('\n\n');
 }
 
-function blockToMarkdown(block: JSONContent, asset: AssetLink): string {
+function blockToMarkdown(block: JSONContent, links: Links): string {
   const a = block.attrs ?? {};
   switch (block.type) {
     case 'paragraph':
     case 'heading': {
-      let text = inlineToMarkdown(block.content ?? [], asset);
+      let text = inlineToMarkdown(block.content ?? [], links);
       if (a.style === 'citation' && text) text = `*${text}*`;
       if (block.type === 'heading') text = `${'#'.repeat(Number(a.level ?? 1))} ${text}`;
       const tag = a.tag as TagName | null;
@@ -84,23 +104,23 @@ function blockToMarkdown(block: JSONContent, asset: AssetLink): string {
       return (block.content ?? [])
         .map((item, i) => {
           const marker = block.type === 'orderedList' ? `${Number(a.start ?? 1) + i}. ` : '- ';
-          return marker + indent(listItemToMarkdown(item.content ?? [], asset), ' '.repeat(marker.length));
+          return marker + indent(listItemToMarkdown(item.content ?? [], links), ' '.repeat(marker.length));
         })
         .join('\n');
     case 'table':
-      return tableToMarkdown(block, asset);
+      return tableToMarkdown(block, links);
     case 'image':
-      return imageMarkdown(a, asset);
+      return imageMarkdown(a, links);
     default:
-      return inlineToMarkdown(block.content ?? [], asset);
+      return inlineToMarkdown(block.content ?? [], links);
   }
 }
 
 /** A nested list follows its item's text on the next line, which keeps the list tight. */
-function listItemToMarkdown(blocks: JSONContent[], asset: AssetLink): string {
+function listItemToMarkdown(blocks: JSONContent[], links: Links): string {
   return blocks
     .map((b, i) => {
-      const md = blockToMarkdown(b, asset);
+      const md = blockToMarkdown(b, links);
       if (i === 0) return md;
       return (b.type === 'bulletList' || b.type === 'orderedList' ? '\n' : '\n\n') + md;
     })
@@ -114,11 +134,11 @@ function indent(text: string, pad: string): string {
     .join('\n');
 }
 
-function tableToMarkdown(table: JSONContent, asset: AssetLink): string {
+function tableToMarkdown(table: JSONContent, links: Links): string {
   const rows = (table.content ?? []).map((row) =>
     (row.content ?? []).map((cell) =>
       (cell.content ?? [])
-        .map((b) => blockToMarkdown(b, asset).replace(/\n+/g, ' '))
+        .map((b) => blockToMarkdown(b, links).replace(/\n+/g, ' '))
         .filter(Boolean)
         .join('<br>'),
     ),
@@ -130,17 +150,18 @@ function tableToMarkdown(table: JSONContent, asset: AssetLink): string {
   return [line(rows[0]!), line(Array(width).fill('---')), ...rows.slice(1).map(line)].join('\n');
 }
 
-function imageMarkdown(a: Record<string, unknown>, asset: AssetLink): string {
+function imageMarkdown(a: Record<string, unknown>, links: Links): string {
   const alt = escapeInline(String(a.alt ?? ''));
-  const href = a.blob ? asset(String(a.blob), String(a.mime ?? ''), '') : null;
+  const href = a.blob ? links.asset(String(a.blob), String(a.mime ?? ''), '') : null;
   return href ? `![${alt}](${encodeHref(href)})` : `[Missing picture${alt ? `: ${alt}` : ''}]`;
 }
 
-function inlineToMarkdown(nodes: JSONContent[], asset: AssetLink): string {
+function inlineToMarkdown(nodes: JSONContent[], links: Links): string {
   return nodes
     .map((node) => {
       if (node.type === 'hardBreak') return '<br>';
-      if (node.type === 'image') return imageMarkdown(node.attrs ?? {}, asset);
+      if (node.type === 'image') return imageMarkdown(node.attrs ?? {}, links);
+      if (node.type === 'cardLink') return typeof node.attrs?.pageId === 'string' ? links.cardLink(node.attrs.pageId) : '';
       if (node.type !== 'text') return '';
       return markText(node);
     })

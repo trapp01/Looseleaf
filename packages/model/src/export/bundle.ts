@@ -8,7 +8,7 @@ import { zipSync, strToU8 } from 'fflate';
 import type * as Y from 'yjs';
 import { LIBRARY_DOC_ID, notebookDocId, pageDocId } from '../ids.js';
 import { getNotebook, listNotebooks } from '../library.js';
-import { getNode, readTree, type PageEntry, type PageLevel, type TreeChild } from '../notebook.js';
+import { getNode, livePages, readTree, type PageEntry, type PageLevel, type TreeChild } from '../notebook.js';
 import { readPage, type PageSnapshot } from '../page.js';
 import type { JSONContent } from '../rich-text.js';
 import { pageToHtml } from './html.js';
@@ -48,6 +48,8 @@ export interface PageForExport {
   modifiedAt: number;
   snapshot: PageSnapshot;
   blobs: Map<string, Uint8Array | null>;
+  /** Page titles by page id, for the text of card links. A card link to a page not here shows a stand-in. */
+  pageTitles?: ReadonlyMap<string, string>;
 }
 
 const EXTENSIONS: Record<ExportFormat, string> = { html: '.html', markdown: '.md', text: '.txt', json: '.json' };
@@ -63,10 +65,12 @@ export async function exportPage(
   pageId: string,
   format: ExportFormat,
 ): Promise<ExportFile[]> {
-  const node = getNode(await source.getDoc(notebookDocId(notebookId)), pageId);
+  const notebook = await source.getDoc(notebookDocId(notebookId));
+  const node = getNode(notebook, pageId);
   if (node?.kind !== 'page') throw new Error(`Notebook ${notebookId} has no page ${pageId}`);
   const entry = { id: node.id, title: node.name, level: node.level, createdAt: node.createdAt, modifiedAt: node.modifiedAt };
   const exporter = new Exporter(source, format);
+  exporter.learnTitles(notebook);
   await exporter.addPage(entry, [], pageFileName(entry.title, new NameAllocator(), EXTENSIONS[format]));
   return exporter.files();
 }
@@ -91,7 +95,9 @@ export async function exportZip(source: DocSource, scope: ExportScope, format: E
     if (scope.kind === 'notebook') {
       await exporter.addNotebook(notebook.id, notebook.name, root);
     } else {
-      const tree = readTree(await source.getDoc(notebookDocId(scope.notebookId)));
+      const notebookDoc = await source.getDoc(notebookDocId(scope.notebookId));
+      exporter.learnTitles(notebookDoc);
+      const tree = readTree(notebookDoc);
       const section = findSection(tree.children, scope.sectionId);
       if (!section) throw new Error(`Notebook ${scope.notebookId} has no section ${scope.sectionId}`);
       await exporter.addChildren([section], [], root);
@@ -116,6 +122,7 @@ function findSection(children: TreeChild[], id: string): TreeChild | undefined {
 class Exporter {
   private readonly output = new Map<string, Uint8Array>();
   private readonly blobCache = new Map<string, Promise<Uint8Array | null>>();
+  private readonly pageTitles = new Map<string, string>();
 
   constructor(
     private readonly source: DocSource,
@@ -126,10 +133,17 @@ class Exporter {
     return [...this.output].map(([path, data]) => ({ path, data }));
   }
 
+  /** Adds a notebook's page titles to those card links show. */
+  learnTitles(notebook: Y.Doc): void {
+    for (const [id, page] of livePages(notebook)) this.pageTitles.set(id, page.title);
+  }
+
   async addNotebook(notebookId: string, name: string, names: NameAllocator): Promise<void> {
     const folder = notebookFolderName(name, names);
     this.output.set(`${folder}/`, new Uint8Array(0));
-    const tree = readTree(await this.source.getDoc(notebookDocId(notebookId)));
+    const notebook = await this.source.getDoc(notebookDocId(notebookId));
+    this.learnTitles(notebook);
+    const tree = readTree(notebook);
     await this.addChildren(tree.children, [folder], new NameAllocator());
   }
 
@@ -144,7 +158,7 @@ class Exporter {
     const snapshot = readPage(await this.source.getDoc(pageDocId(entry.id)));
     const blobs = new Map<string, Uint8Array | null>();
     for (const hash of blobHashes(snapshot)) blobs.set(hash, await this.blob(hash));
-    const page: PageForExport = { ...entry, snapshot, blobs };
+    const page: PageForExport = { ...entry, snapshot, blobs, pageTitles: this.pageTitles };
     const path = [...folder, fileName].join('/');
     const toRoot = '../'.repeat(folder.length);
     switch (this.format) {

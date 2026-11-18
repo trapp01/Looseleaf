@@ -230,6 +230,13 @@ export function getNode(doc: Y.Doc, id: string): NodeEntry | null {
   return map ? readEntry(id, map) : null;
 }
 
+/** Every node as stored, deleted or not, including nodes no reader places, in no particular order. */
+export function listNodes(doc: Y.Doc): NodeEntry[] {
+  const nodes: NodeEntry[] = [];
+  nodesMap(doc).forEach((map, id) => nodes.push(readEntry(id, map)));
+  return nodes;
+}
+
 /**
  * Deleted notes: every node marked deleted, newest deletion first. Pages
  * inside a deleted section are not listed on their own; they come back with
@@ -255,8 +262,7 @@ function assertSection(s: Structure, parent: string | null, what: string): asser
   if (node?.kind !== 'section') throw new Error(`Cannot put ${what} under ${parent}: it is not a section`);
 }
 
-function insertNode(doc: Y.Doc, fields: Record<string, unknown>): string {
-  const id = newId();
+function insertNode(doc: Y.Doc, fields: Record<string, unknown>, id = newId()): string {
   doc.transact(() => {
     const map = new Y.Map<unknown>();
     nodesMap(doc).set(id, map);
@@ -282,8 +288,13 @@ export function createGroup(doc: Y.Doc, input: { name: string } & Placement): st
   });
 }
 
-/** Adds a section and returns its id. Without a colour it takes the next palette colour. */
-export function createSection(doc: Y.Doc, input: { name: string; color?: ColorName } & Placement): string {
+/**
+ * Adds a section and returns its id. Without a colour it takes the next
+ * palette colour. With `id`, a node that already has that id is left as it is
+ * and the id returned, so two replicas making the same section end with one.
+ */
+export function createSection(doc: Y.Doc, input: { name: string; color?: ColorName; id?: string } & Placement): string {
+  if (input.id !== undefined && nodesMap(doc).has(input.id)) return input.id;
   const s = new Structure(doc);
   assertContainerParent(s, input.parent, 'a section');
   if (input.color !== undefined && !isColorName(input.color)) {
@@ -300,12 +311,13 @@ export function createSection(doc: Y.Doc, input: { name: string; color?: ColorNa
     order: orderAt(siblings, input.index ?? siblings.length),
     createdAt: now,
     modifiedAt: now,
-  });
+  }, input.id);
 }
 
 /**
  * Adds a page entry to a section and returns the page id. The page doc
- * (`pg:<id>`) is not created here; it starts empty when first opened.
+ * (`pg:<id>`) is not created here; it starts empty when first opened. With
+ * `id`, a node that already has that id is left as it is and the id returned.
  */
 export function createPage(
   doc: Y.Doc,
@@ -316,8 +328,10 @@ export function createPage(
     index?: number;
     createdAt?: number;
     modifiedAt?: number;
+    id?: string;
   },
 ): string {
+  if (input.id !== undefined && nodesMap(doc).has(input.id)) return input.id;
   const s = new Structure(doc);
   assertSection(s, input.section, 'a page');
   const siblings = s.childrenOf(input.section);
@@ -330,7 +344,7 @@ export function createPage(
     order: orderAt(siblings, input.index ?? siblings.length),
     createdAt,
     modifiedAt: input.modifiedAt ?? createdAt,
-  });
+  }, input.id);
 }
 
 /** Renames a group or section, or retitles a page. Updates modifiedAt. */
@@ -453,4 +467,23 @@ export function purgeNode(doc: Y.Doc, id: string): string[] {
 /** Sets a node's modifiedAt to now. A node that is gone is left alone. */
 export function touchNode(doc: Y.Doc, id: string): void {
   nodesMap(doc).get(id)?.set('modifiedAt', Date.now());
+}
+
+/** A live page's title and section, as `livePages` gives them. */
+export interface LivePage {
+  title: string;
+  sectionId: string;
+}
+
+/** Every page the tree shows (live, with live sections and groups above it), by page id. */
+export function livePages(doc: Y.Doc): Map<string, LivePage> {
+  const pages = new Map<string, LivePage>();
+  const visit = (children: TreeChild[]): void => {
+    for (const child of children) {
+      if (child.kind === 'group') visit(child.children);
+      else for (const page of child.pages) pages.set(page.id, { title: page.title, sectionId: child.id });
+    }
+  };
+  visit(readTree(doc).children);
+  return pages;
 }

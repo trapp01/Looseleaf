@@ -7,11 +7,13 @@
  * hard breaks. Inline code keeps its text without a mark, since the schema
  * has none. Anything else stays as plain text, and no input throws. The
  * Markdown becomes import-tree blocks, and `blocksToJson` builds the body
- * the same way an import does.
+ * the same way an import does. Task items are new To Do lines, so each gets a
+ * line id and a tagged-at time (see `todo-line-ids.ts`).
  */
 import type { ImportedBlock, ImportedListItem, ImportedParagraph, ImportedRun } from './import-tree.js';
 import { blocksToJson } from './import.js';
 import { emptyBody, TAG_LABELS, TAGS, type JSONContent } from './rich-text.js';
+import { SYSTEM_STAMP, stampTodoLines, type TodoLineStamp } from './todo-line-ids.js';
 
 export interface MarkdownBody {
   /** A rich-text document; one empty paragraph when the Markdown holds nothing. */
@@ -20,15 +22,16 @@ export interface MarkdownBody {
   warnings: string[];
 }
 
-/** Converts Markdown to a text container body. */
-export async function markdownToBody(markdown: string): Promise<MarkdownBody> {
+/** Converts Markdown to a text container body. `stamp` gives To Do lines their ids and times; tests pass a fixed one. */
+export async function markdownToBody(markdown: string, options: { stamp?: TodoLineStamp } = {}): Promise<MarkdownBody> {
   const warnings: string[] = [];
   const lines = markdown
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .map((line) => line.replace(/^\t+/, (tabs) => '    '.repeat(tabs.length)));
   const content = await blocksToJson(parseBlocks(lines), noPictures, (text) => warnings.push(text));
-  return { body: { type: 'doc', content: content.length > 0 ? content : emptyBody().content }, warnings };
+  const body = stampTodoLines({ type: 'doc', content: content.length > 0 ? content : emptyBody().content }, options.stamp ?? SYSTEM_STAMP);
+  return { body, warnings };
 }
 
 async function noPictures(): Promise<string> {

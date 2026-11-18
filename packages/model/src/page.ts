@@ -247,6 +247,17 @@ export function textContainerBody(doc: Y.Doc, id: string): Y.XmlFragment {
   return body;
 }
 
+/** The live rich-text bodies of every text container, in reading order. */
+export function textContainerBodies(doc: Y.Doc): Y.XmlFragment[] {
+  const found: Array<{ id: string; x: number; y: number; body: Y.XmlFragment }> = [];
+  containers(doc).forEach((map, id) => {
+    const body = map.get('body');
+    if (map.get('kind') !== 'text' || !(body instanceof Y.XmlFragment)) return;
+    found.push({ id, x: Number(map.get('x') ?? 0), y: Number(map.get('y') ?? 0), body });
+  });
+  return found.sort((a, b) => a.y - b.y || a.x - b.x || (a.id < b.id ? -1 : 1)).map((c) => c.body);
+}
+
 /** Adds a stroke and returns its id. A stroke is never edited; erasing deletes it. */
 export function addStroke(doc: Y.Doc, stroke: Stroke): string {
   if (stroke.points.length < 2 || stroke.points.length % 2 !== 0) {

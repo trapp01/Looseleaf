@@ -5,7 +5,7 @@
  * stored in. Builds in plain Node; nothing here touches the DOM until an
  * editor runs the extensions' parse and render hooks.
  */
-import { Extension, getSchema, type AnyExtension, type JSONContent } from '@tiptap/core';
+import { Extension, Node as TiptapNode, getSchema, mergeAttributes, type AnyExtension, type JSONContent } from '@tiptap/core';
 import { Node as PMNode } from '@tiptap/pm/model';
 import type { Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
@@ -25,6 +25,8 @@ import TextAlign from '@tiptap/extension-text-align';
 import Image from '@tiptap/extension-image';
 import * as Y from 'yjs';
 import { prosemirrorJSONToYXmlFragment, yXmlFragmentToProsemirrorJSON } from 'y-prosemirror';
+import { APP_ADDRESS_SCHEME } from './page-address.js';
+import { todoLinePlugin } from './todo-line-ids.js';
 
 export type { JSONContent } from '@tiptap/core';
 
@@ -131,7 +133,12 @@ function parseIndent(element: { getAttribute(name: string): string | null; style
   return margin ? Math.round(parseFloat(margin[1]!) / INDENT_STEP_PX) : 0;
 }
 
-/** Tag, To Do state, paragraph style and indent on paragraphs and headings. */
+/**
+ * Tag, To Do state, paragraph style and indent on paragraphs and headings,
+ * and a To Do line's `lineId`, `taggedAt` (epoch ms) and `inbox` (false once
+ * someone chose "Keep it as a line"). The line attributes are not carried to
+ * the new block on Enter; `todo-line-ids.ts` gives that block its own.
+ */
 const BlockAttributes = Extension.create({
   name: 'blockAttributes',
   addCommands() {
@@ -165,6 +172,27 @@ const BlockAttributes = Extension.create({
             default: null,
             parseHTML: (element) => oneOf(element.getAttribute('data-style'), PARAGRAPH_STYLES),
             renderHTML: (attrs) => (attrs.style ? { 'data-style': attrs.style } : {}),
+          },
+          lineId: {
+            default: null,
+            keepOnSplit: false,
+            parseHTML: (element) => element.getAttribute('data-line-id'),
+            renderHTML: (attrs) => (attrs.lineId ? { 'data-line-id': attrs.lineId } : {}),
+          },
+          taggedAt: {
+            default: null,
+            keepOnSplit: false,
+            parseHTML: (element) => {
+              const value = Number(element.getAttribute('data-tagged-at'));
+              return Number.isFinite(value) && value > 0 ? value : null;
+            },
+            renderHTML: (attrs) => (typeof attrs.taggedAt === 'number' ? { 'data-tagged-at': String(attrs.taggedAt) } : {}),
+          },
+          inbox: {
+            default: true,
+            keepOnSplit: false,
+            parseHTML: (element) => element.getAttribute('data-inbox') !== 'false',
+            renderHTML: (attrs) => (attrs.inbox === false ? { 'data-inbox': 'false' } : {}),
           },
           indent: {
             default: 0,
@@ -240,6 +268,42 @@ const BlobImage = Image.extend({
 });
 
 /**
+ * A card link: an inline link to a card, holding the card's page id. It has no
+ * text of its own; the editor shows the card's title, ref and status live, and
+ * the exports write the page title.
+ */
+const CardLink = TiptapNode.create({
+  name: 'cardLink',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  addAttributes() {
+    return {
+      pageId: {
+        default: null,
+        parseHTML: (element: ElementLike) => element.getAttribute('data-card-link'),
+        renderHTML: (attrs: Record<string, unknown>) => (attrs.pageId ? { 'data-card-link': String(attrs.pageId) } : {}),
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'span[data-card-link]' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['span', mergeAttributes(HTMLAttributes)];
+  },
+});
+
+/** Gives To Do lines their ids in an editor; see `todo-line-ids.ts`. */
+const TodoLineIds = Extension.create({
+  name: 'todoLineIds',
+  addProseMirrorPlugins() {
+    return [todoLinePlugin()];
+  },
+});
+
+/**
  * THE extension list for text container bodies. History is off because Yjs
  * owns undo; quotes and code are paragraph styles, so the blockquote and code
  * block nodes are left out, as are the inline code mark and horizontal rule.
@@ -276,6 +340,8 @@ export const richTextExtensions: AnyExtension[] = [
     },
   }),
   BlobImage,
+  CardLink,
+  TodoLineIds,
 ];
 
 export const richTextSchema = getSchema(richTextExtensions);
@@ -345,16 +411,20 @@ export function readBody(fragment: Y.XmlFragment): JSONContent {
  * list items (indented two spaces per level), tab-separated table cells, and
  * `[Picture: alt]` for pictures. With `tags`, tagged lines start with `[ ]`,
  * `[x]` or the tag's label in brackets; with `indent`, indented paragraphs
- * start with two spaces per step. No trailing newline.
+ * start with two spaces per step; with `cardLinkText`, a card link shows the
+ * text it returns for the page id (nothing without it). No trailing newline.
  */
-export function bodyToText(body: JSONContent, options: { tags?: boolean; indent?: boolean } = {}): string {
+export function bodyToText(
+  body: JSONContent,
+  options: { tags?: boolean; indent?: boolean; cardLinkText?: (pageId: string) => string } = {},
+): string {
   const lines: string[] = [];
   const walk = (node: JSONContent, indent: string, marker: string): void => {
     switch (node.type) {
       case 'paragraph':
       case 'heading': {
         const steps = options.indent ? '  '.repeat(Number(node.attrs?.indent) || 0) : '';
-        lines.push(indent + steps + marker + (options.tags ? tagPrefix(node) : '') + inlineText(node));
+        lines.push(indent + steps + marker + (options.tags ? tagPrefix(node) : '') + inlineText(node, options.cardLinkText));
         return;
       }
       case 'image':
@@ -392,17 +462,29 @@ export function tagPrefix(node: JSONContent): string {
   return `[${TAG_LABELS[tag]}] `;
 }
 
-/** The text of an inline run of content; hard breaks become newlines. */
-export function inlineText(node: JSONContent): string {
+/**
+ * The text of an inline run of content; hard breaks become newlines. A card
+ * link shows what `cardLinkText` returns for its page id, or nothing.
+ */
+export function inlineText(node: JSONContent, cardLinkText?: (pageId: string) => string): string {
   return (node.content ?? [])
-    .map((child) => (child.type === 'text' ? (child.text ?? '') : child.type === 'hardBreak' ? '\n' : ''))
+    .map((child) => {
+      if (child.type === 'text') return child.text ?? '';
+      if (child.type === 'hardBreak') return '\n';
+      if (child.type === 'cardLink' && cardLinkText !== undefined && typeof child.attrs?.pageId === 'string') return cardLinkText(child.attrs.pageId);
+      return '';
+    })
     .join('');
 }
 
+const APP_PAGE_LINK = new RegExp(`^${APP_ADDRESS_SCHEME}://page/`, 'i');
+
 /**
- * The link target exports and imports keep: web, mail, phone and in-page links,
- * trimmed. Null for anything else, such as a script URL.
+ * The link target exports and imports keep: web, mail, phone and in-page
+ * links, and the desktop app's page addresses, trimmed. Null for anything
+ * else, such as a script URL.
  */
 export function safeHref(href: string): string | null {
-  return /^(https?:|mailto:|tel:|#)/i.test(href.trim()) ? href.trim() : null;
+  const trimmed = href.trim();
+  return /^(https?:|mailto:|tel:|#)/i.test(trimmed) || APP_PAGE_LINK.test(trimmed) ? trimmed : null;
 }

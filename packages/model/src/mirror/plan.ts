@@ -10,7 +10,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { LIBRARY_DOC_ID, notebookDocId, pageDocId } from '../ids.js';
 import { listNotebooks } from '../library.js';
-import { readTree } from '../notebook.js';
+import { livePages, readTree } from '../notebook.js';
 import { readPage } from '../page.js';
 import { blobHashes, type DocSource, type ExportFile, type PageForExport } from '../export/bundle.js';
 import { layoutChildren, notebookFolderName } from '../export/layout.js';
@@ -87,7 +87,9 @@ export async function planMirror(input: MirrorPlanInput): Promise<MirrorPlan> {
   const notebookNames = new NameAllocator();
   for (const notebook of listNotebooks(await source.getDoc(LIBRARY_DOC_ID))) {
     const folder = notebookFolderName(notebook.name, notebookNames);
-    const tree = readTree(await source.getDoc(notebookDocId(notebook.id)));
+    const notebookDoc = await source.getDoc(notebookDocId(notebook.id));
+    const tree = readTree(notebookDoc);
+    const pageTitles = new Map([...livePages(notebookDoc)].map(([id, page]) => [id, page.title]));
     for (const item of layoutChildren(tree.children, [folder], new NameAllocator(), '.md')) {
       if (item.kind !== 'page') continue;
       const entry = {
@@ -116,7 +118,7 @@ export async function planMirror(input: MirrorPlanInput): Promise<MirrorPlan> {
       let rendered: RenderedPage;
       try {
         const snapshot = readPage(await source.getDoc(pageDocId(entry.id)));
-        rendered = await renderPage({ ...item.page, snapshot, blobs: new Map() }, entry, item.folder.length, hasBlob);
+        rendered = await renderPage({ ...item.page, snapshot, blobs: new Map(), pageTitles }, entry, item.folder.length, hasBlob);
       } catch (error) {
         failures.push({ pageId: entry.id, error });
         if (before !== undefined) {

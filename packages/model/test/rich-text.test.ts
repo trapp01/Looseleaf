@@ -102,6 +102,7 @@ describe('rich-text schema', () => {
         'tableHeader',
         'image',
         'hardBreak',
+        'cardLink',
       ].sort(),
     );
     expect(Object.keys(richTextSchema.marks).sort()).toEqual(
@@ -109,11 +110,12 @@ describe('rich-text schema', () => {
     );
   });
 
-  it('puts tag, checked, style and alignment on paragraphs and headings', () => {
+  it('puts tag, checked, style, alignment and the To Do line fields on paragraphs and headings', () => {
     for (const name of ['paragraph', 'heading']) {
       const attrs = richTextSchema.nodes[name]!.spec.attrs!;
-      expect(Object.keys(attrs)).toEqual(expect.arrayContaining(['tag', 'checked', 'style', 'textAlign']));
+      expect(Object.keys(attrs)).toEqual(expect.arrayContaining(['tag', 'checked', 'style', 'textAlign', 'lineId', 'taggedAt', 'inbox']));
     }
+    expect(Object.keys(richTextSchema.nodes.cardLink!.spec.attrs!)).toEqual(['pageId']);
     expect(Object.keys(richTextSchema.nodes.image!.spec.attrs!).sort()).toEqual(['alt', 'blob', 'height', 'mime', 'width']);
   });
 

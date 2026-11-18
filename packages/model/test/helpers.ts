@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import * as Y from 'yjs';
-import type { DocSink, DocSource } from '../src/index.js';
+import type { DocAccess, DocSink, DocSource, TodoLineStamp } from '../src/index.js';
 
 /** Brings two replicas of one doc fully in step, as a reconnect would. */
 export function syncDocs(a: Y.Doc, b: Y.Doc): void {
@@ -61,3 +61,41 @@ export const PNG_BYTES = new Uint8Array([
   0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00,
   0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ]);
+
+/** Line ids `line-1`, `line-2`, … and times 1000, 1001, … in the order they are asked for. */
+export function fixedStamp(start = 1000): TodoLineStamp {
+  let ids = 0;
+  let time = start;
+  return { now: () => time++, newId: () => `line-${++ids}` };
+}
+
+/** Changes docs in a replica the way the server's hub does: one transaction per call. */
+export function accessTo(replica: MemoryReplica): DocAccess {
+  return {
+    async withDoc<T>(docId: string, change: (doc: Y.Doc) => T): Promise<T> {
+      const doc = await replica.getDoc(docId);
+      return doc.transact(() => change(doc));
+    },
+  };
+}
+
+/** A second replica holding a copy of every doc the first one has. */
+export function forkReplica(replica: MemoryReplica): MemoryReplica {
+  const copy = new MemoryReplica();
+  for (const [id, doc] of replica.docs) copy.docs.set(id, forkDoc(doc));
+  return copy;
+}
+
+/** Brings every doc of two replicas in step, as a reconnect would. */
+export function syncReplicas(a: MemoryReplica, b: MemoryReplica): void {
+  for (const id of new Set([...a.docs.keys(), ...b.docs.keys()])) {
+    if (!a.docs.has(id)) a.docs.set(id, new Y.Doc());
+    if (!b.docs.has(id)) b.docs.set(id, new Y.Doc());
+    syncDocs(a.docs.get(id)!, b.docs.get(id)!);
+  }
+}
+
+/** Every doc's state as bytes, by doc id in sorted order, for comparing two replicas. */
+export function replicaBytes(replica: MemoryReplica): Map<string, Uint8Array> {
+  return new Map([...replica.docs].sort(([x], [y]) => (x < y ? -1 : 1)).map(([id, doc]) => [id, stateBytes(doc)]));
+}

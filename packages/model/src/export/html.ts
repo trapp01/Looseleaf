@@ -6,12 +6,14 @@
 import type { JSONContent } from '../rich-text.js';
 import { INDENT_STEP_PX, TAG_LABELS, bodyToText, safeHref, type TagName } from '../rich-text.js';
 import { PAPER_SPACING, type Container, type PageSnapshot } from '../page.js';
+import { appPageAddress } from '../page-address.js';
 import type { PageForExport } from './bundle.js';
+import { cardLinkText } from './markdown.js';
 
 export function pageToHtml(page: PageForExport): string {
   const { snapshot } = page;
   const created = new Date(page.createdAt);
-  const items = snapshot.containers.map((c) => renderContainer(c, page.blobs)).join('\n');
+  const items = snapshot.containers.map((c) => renderContainer(c, page.blobs, page.pageTitles)).join('\n');
   return `<!doctype html>
 <html>
 <head>
@@ -100,9 +102,9 @@ function containerHeight(c: Container): number {
   return bodyToText(c.body).split('\n').length * 20 + 8;
 }
 
-function renderContainer(c: Container, blobs: PageForExport['blobs']): string {
+function renderContainer(c: Container, blobs: PageForExport['blobs'], pageTitles: PageForExport['pageTitles']): string {
   const box = `left: ${c.x}px; top: ${c.y}px; width: ${c.width}px; z-index: ${c.z}`;
-  if (c.kind === 'text') return `<div class="container text" style="${box}">${renderBody(c.body, blobs)}</div>`;
+  if (c.kind === 'text') return `<div class="container text" style="${box}">${renderBody(c.body, blobs, pageTitles)}</div>`;
   const bytes = blobs.get(c.blob) ?? null;
   if (c.kind === 'image') {
     const inner = bytes
@@ -135,8 +137,12 @@ function renderInk(snapshot: PageSnapshot): string {
   return `<svg class="ink" xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${paths.join('')}</svg>`;
 }
 
-/** A text container body as HTML. Pictures become data URIs, or a placeholder when the blob is missing. */
-export function renderBody(body: JSONContent, blobs: PageForExport['blobs']): string {
+/**
+ * A text container body as HTML. Pictures become data URIs, or a placeholder
+ * when the blob is missing. A card link is a link to the desktop app's page
+ * address showing the page title from `pageTitles`.
+ */
+export function renderBody(body: JSONContent, blobs: PageForExport['blobs'], pageTitles?: PageForExport['pageTitles']): string {
   const render = (node: JSONContent): string => {
     const children = () => (node.content ?? []).map(render).join('');
     const a = node.attrs ?? {};
@@ -191,6 +197,10 @@ export function renderBody(body: JSONContent, blobs: PageForExport['blobs']): st
       }
       case 'hardBreak':
         return '<br>';
+      case 'cardLink': {
+        if (typeof a.pageId !== 'string') return '';
+        return `<a class="card-link" href="${escapeHtml(appPageAddress(a.pageId))}">${escapeHtml(cardLinkText({ pageTitles }, a.pageId))}</a>`;
+      }
       case 'text':
         return renderText(node);
       default:
