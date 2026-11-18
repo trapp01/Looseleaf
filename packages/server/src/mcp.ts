@@ -15,12 +15,24 @@ export const MCP_PROTOCOL_VERSIONS: readonly string[] = ['2025-11-25', '2025-06-
 /** A request body larger than this is refused with 413. */
 export const MCP_MAX_BODY_BYTES = 64 * 1024;
 
-const INSTRUCTIONS =
+/** Sent to every assistant that connects. It is what makes an agent leave notes behind as it works. */
+const INSTRUCTIONS = [
   "These tools read and add to the user's own notes on their Looseleaf server, as Markdown. " +
-  'list_notebooks gives notebook and section ids, list_pages gives the page ids in a section, search_notes finds ' +
-  'pages by words in their title or text, and read_page returns one page by its id. create_page adds a page at the ' +
-  'end of a section and append_to_page adds text to the end of a page; neither changes or removes anything already ' +
-  'in the notes. A write shows in the read tools a few seconds after it is made.';
+    'list_notebooks gives notebook and section ids, list_pages gives the page ids in a section, search_notes finds ' +
+    'pages by words in their title or text, and read_page returns one page by its id. create_page adds a page at the ' +
+    'end of a section and append_to_page adds text to the end of a page; neither changes or removes anything already ' +
+    'in the notes. A write shows in the read tools a few seconds after it is made.',
+  'Looseleaf is where the notes and context that outlast a task are kept. When your work produces something the user ' +
+    'would want to read in a month, such as a plan, what an investigation found, a decision and its reason, or how to ' +
+    'test something, write it to a page without being asked. A small fix needs no page.',
+  'Find the page first with search_notes. When one exists on the subject, add a dated entry with append_to_page. When ' +
+    'none exists, create_page in the section the subject belongs to; list_notebooks shows the sections, which are ' +
+    'often named for an app or an area of work.',
+  'Write notes, not status: whether a task is open or done lives on the task board, not in a page title or a ' +
+    'checklist here.',
+  "When the task has a card on Corkboard, the user's kanban board, start a new page with the card's address, and link " +
+    'the page from the card as looseleaf:<page id>.',
+].join('\n\n');
 
 const PARSE_ERROR = -32700;
 const INVALID_REQUEST = -32600;

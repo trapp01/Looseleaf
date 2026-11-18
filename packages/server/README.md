@@ -126,6 +126,11 @@ sent to every connected device, and shows in the mirror (and so in the read
 tools) about 5 seconds later. They only add; nothing already in the notes is
 changed, moved or removed. A request body may be up to 64 KB.
 
+The `initialize` reply carries instructions that tell an agent to write what
+outlasts a task (a plan, a finding, a decision) to a page without being asked:
+append to the page on that subject, or create one in the section it belongs
+to, and link it from the task's Corkboard card when there is one.
+
 | Tool | Arguments | Returns |
 | --- | --- | --- |
 | `list_notebooks` | none | Every notebook with its id and its sections, each with its id and page count. A section inside groups is shown as `Group / Section`. Notebooks and sections with no pages are not listed. |
