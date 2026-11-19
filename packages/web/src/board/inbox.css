@@ -51,13 +51,6 @@
   color: var(--accent);
 }
 
-.inbox-empty {
-  margin: 0;
-  padding: 2px 12px 12px;
-  color: var(--fg-muted);
-  font-size: 13px;
-}
-
 .inbox-list {
   display: flex;
   flex-direction: column;

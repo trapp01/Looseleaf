@@ -134,8 +134,8 @@ lists what is built.
   Dragging a line into a status turns it into a card at the drop, between
   the cards it was let go between; nothing drops into the Inbox, and a line
   let go anywhere else stays a line. The menu is the line's menu (see "On
-  the page"). An empty Inbox says "New To Do lines from this notebook's
-  pages land here."
+  the page"). An empty Inbox is not shown: the statuses start at the board's
+  left edge, and the lane appears when a line arrives.
 - **Card front**: ref, page title, labels, due day, the first lines of the
   page's text and the checklist count (ticked over total of the page's To Do
   lines), with counts of comments and links. The count follows a tick on

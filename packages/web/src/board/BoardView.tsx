@@ -7,7 +7,7 @@
  * the Inbox. Dragging is off while the filter hides cards, since a place
  * among hidden cards is ambiguous.
  */
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   closestCenter,
   closestCorners,
@@ -108,6 +108,13 @@ export function BoardView({ current }: { current: CurrentBoard }) {
   const columns = drag?.kind === 'card' ? drag.columns : shown;
   const boardRef = useRef<HTMLDivElement>(null);
   useEdgeScroll(boardRef, drag !== null && drag.kind !== 'status');
+  // An empty Inbox is not shown. On a phone the columns snap, so an Inbox appearing would leave the
+  // view on the column it was on; a board still at its start moves back to show the Inbox.
+  const atStart = useRef(true);
+  const showsInbox = inbox.length > 0;
+  useLayoutEffect(() => {
+    if (showsInbox && atStart.current) boardRef.current?.scrollTo({ left: 0, behavior: 'instant' });
+  }, [showsInbox]);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -189,7 +196,10 @@ export function BoardView({ current }: { current: CurrentBoard }) {
           ref={boardRef}
           className="board"
           data-testid="board"
-          onScroll={(event) => event.currentTarget.classList.toggle('is-scrolled', event.currentTarget.scrollLeft > 0)}
+          onScroll={(event) => {
+            atStart.current = event.currentTarget.scrollLeft === 0;
+            event.currentTarget.classList.toggle('is-scrolled', !atStart.current);
+          }}
         >
           <InboxLane current={current} lines={inbox} dragDisabled={filtering} />
           <SortableContext items={board.statuses.map((status) => `status:${status.id}`)} strategy={horizontalListSortingStrategy}>

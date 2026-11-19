@@ -20,7 +20,9 @@ test('lines from a loose page reach the Inbox, become cards from the page and by
   // Tagged before the board existed, so it never reaches the Inbox.
   await addTodoLine(page, 'Rake the leaves', 60, 40);
   await addBoard(page, 'GAR');
-  await expect(page.locator('.inbox-empty')).toHaveText('New To Do lines from this notebook’s pages land here.');
+  // An empty Inbox is not shown.
+  await expect(status(page, 'Backlog')).toBeVisible();
+  await expect(page.getByTestId('inbox')).toHaveCount(0);
 
   await page.locator('.sections-pane .row', { hasText: 'New Section 1' }).click();
   await page.locator('.pages-pane .row', { hasText: 'Spring jobs' }).click();
@@ -78,17 +80,18 @@ test('lines from a loose page reach the Inbox, become cards from the page and by
   await page.getByRole('menuitem', { name: 'Keep it as a line' }).click();
   await expect(inboxLine(page, 'Prune the roses')).toHaveCount(0);
 
-  // A line dragged between two cards becomes a card there.
+  // Cards never drop into the Inbox: one let go there lands where the drag showed it, above the nearest card.
   await addCards(page, 'Backlog', ['Weed the beds', 'Water the pots']);
-  // Let go over the lower part of the card, whatever its height while its page text is still being read.
-  const water = (await card(page, 'Water the pots').boundingBox())!;
-  await dragTo(page, inboxLine(page, 'Sow carrots'), card(page, 'Water the pots'), { x: 60, y: water.height - 8 });
-  await expect(status(page, 'Backlog').locator('.card-title')).toHaveText(['Water the pots', 'Sow carrots', 'Weed the beds']);
-  await expect(page.locator('.inbox-empty')).toBeVisible();
-  // Cards never drop into the Inbox.
   await dragTo(page, card(page, 'Weed the beds'), page.getByTestId('inbox'), { x: 60, y: 30 });
-  await expect(page.locator('.inbox-line')).toHaveCount(0);
-  await expect(card(page, 'Weed the beds')).toBeVisible();
+  await expect(page.locator('.inbox-text')).toHaveText(['Sow carrots']);
+  await expect(status(page, 'Backlog').locator('.card-title')).toHaveText(['Weed the beds', 'Water the pots']);
+
+  // A line dragged onto a card becomes a card there, and the emptied Inbox goes.
+  // Let go over the lower part of the card, whatever its height while its page text is still being read.
+  const weed = (await card(page, 'Weed the beds').boundingBox())!;
+  await dragTo(page, inboxLine(page, 'Sow carrots'), card(page, 'Weed the beds'), { x: 60, y: weed.height - 8 });
+  await expect(status(page, 'Backlog').locator('.card-title')).toHaveText(['Weed the beds', 'Sow carrots', 'Water the pots']);
+  await expect(page.getByTestId('inbox')).toHaveCount(0);
 
   // On the page: the ticked line, the kept line without its pill, and the dragged line as a card link.
   await page.locator('.sections-pane .row', { hasText: 'New Section 1' }).click();

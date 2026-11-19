@@ -2,7 +2,8 @@
  * Scrolls the board sideways while a card or an Inbox line is dragged near
  * its left or right edge, faster the nearer the pointer is, for as long as it
  * stays there. The left edge is the pinned Inbox's right side, since the
- * statuses scroll under the Inbox.
+ * statuses scroll under the Inbox, or the board's own edge when the Inbox is
+ * empty and not shown.
  */
 import { useEffect, type RefObject } from 'react';
 

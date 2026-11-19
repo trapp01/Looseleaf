@@ -107,9 +107,9 @@ test('the Inbox stays at the board’s left while statuses scroll, and dragging 
   await page.mouse.move(done.x + done.width / 2, done.y + 12, { steps: 2 });
   await page.mouse.up();
   await expect(status(page, 'Done').locator('.card-front', { hasText: 'Paint the fence' })).toBeVisible();
-  await expect(inbox.locator('.inbox-line')).toHaveCount(0);
+  await expect(inbox).toHaveCount(0);
 
-  // A card dragged to the left edge scrolls back, and the Inbox does not take it.
+  // With the Inbox gone, a card dragged to the board's own left edge scrolls back.
   await page.waitForTimeout(100);
   const moved = (await card(page, 'Paint the fence').boundingBox())!;
   await page.mouse.move(moved.x + moved.width / 2, moved.y + moved.height / 2);

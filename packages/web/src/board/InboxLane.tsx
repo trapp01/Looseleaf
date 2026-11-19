@@ -5,7 +5,8 @@
  * lines waiting to become cards, newest first, each with a tick box (which
  * ticks the line on its page), its text, the page it is on (which opens that
  * page) and a menu. A line drags into a status to become a card there; the
- * lane itself takes no drops and has no order of its own.
+ * lane itself takes no drops and has no order of its own. With no lines it
+ * is not shown, and the statuses start at the board's left edge.
  */
 import { useDraggable } from '@dnd-kit/core';
 import { DocumentRegular, MailInboxRegular, MoreHorizontalRegular } from '@fluentui/react-icons';
@@ -18,6 +19,7 @@ import type { CurrentBoard } from './live-board.js';
 import { openPage } from './open-page.js';
 
 export function InboxLane({ current, lines, dragDisabled }: { current: CurrentBoard; lines: InboxLine[]; dragDisabled: boolean }) {
+  if (lines.length === 0) return null;
   // The dock keeps the lane at the board's left edge while the statuses scroll under it.
   return (
     <div className="inbox-dock">
@@ -29,15 +31,11 @@ export function InboxLane({ current, lines, dragDisabled }: { current: CurrentBo
             {lines.length}
           </span>
         </header>
-        {lines.length === 0 ? (
-          <p className="inbox-empty">New To Do lines from this notebook’s pages land here.</p>
-        ) : (
-          <ol className="inbox-list">
-            {lines.map((line) => (
-              <InboxItem key={line.id} current={current} line={line} dragDisabled={dragDisabled} />
-            ))}
-          </ol>
-        )}
+        <ol className="inbox-list">
+          {lines.map((line) => (
+            <InboxItem key={line.id} current={current} line={line} dragDisabled={dragDisabled} />
+          ))}
+        </ol>
       </section>
     </div>
   );
