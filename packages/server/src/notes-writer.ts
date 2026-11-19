@@ -1,6 +1,7 @@
 /**
- * Writes notes for the MCP endpoint: a new page with a Markdown body, or
- * Markdown added to the end of an existing page. Every read and write goes
+ * Writes notes for the MCP endpoint: a new notebook with its first sections,
+ * a new page with a Markdown body, or Markdown added to the end of an
+ * existing page. Every read and write goes
  * through `Hub.withDoc`, so a write is stored and relayed to connected clients
  * like a client's edit, and the mirror picks it up from the store after its
  * delay. Besides `mirror.ts`, this is the only server file that reads or
@@ -10,7 +11,9 @@
 import {
   LIBRARY_DOC_ID,
   appendToPage,
+  createNotebook,
   createPage,
+  createSection,
   getNode,
   listNotebooks,
   markdownToBody,
@@ -40,6 +43,11 @@ export type WriteOutcome =
   /** The node, or a section, group or notebook above it, is in Deleted notes. */
   | { kind: 'section-deleted' | 'page-deleted' };
 
+export type NotebookOutcome =
+  | { kind: 'created'; notebook: { id: string; name: string }; sections: Array<{ id: string; name: string }> }
+  /** A live notebook already has the name, ignoring case. */
+  | { kind: 'name-taken'; name: string };
+
 /** Where a live section or page sits in its notebook's tree. */
 interface Place {
   sectionId: string;
@@ -50,6 +58,23 @@ interface Place {
 
 export class NotesWriter {
   constructor(private readonly hub: Hub) {}
+
+  /**
+   * Adds a notebook at the end of the library, with top-level sections of the
+   * given names in order. A name a live notebook already has is refused, so
+   * a board or a caller can name the notebook by name.
+   */
+  async createNotebook(input: { name: string; sections: string[] }): Promise<NotebookOutcome> {
+    const made = await this.hub.withDoc(LIBRARY_DOC_ID, (doc) => {
+      const taken = listNotebooks(doc).find((notebook) => notebook.name.toLowerCase() === input.name.toLowerCase());
+      return taken === undefined ? createNotebook(doc, { name: input.name }) : { taken: taken.name };
+    });
+    if (typeof made !== 'string') return { kind: 'name-taken', name: made.taken };
+    const sections = await this.hub.withDoc(notebookDocId(made), (doc) =>
+      input.sections.map((name) => ({ id: createSection(doc, { name, parent: null }), name })),
+    );
+    return { kind: 'created', notebook: { id: made, name: input.name }, sections };
+  }
 
   /**
    * Adds a top-level page at the end of a section. With Markdown the page gets

@@ -289,6 +289,7 @@ comment what was done and what is left when it stops.
 | `list_pages` | `section_id` | The section's pages in order, with ids, titles and subpage levels. |
 | `search_notes` | `query`, `notebook_id` (optional), `limit` (optional, default 20, at most 100) | Pages whose title or text holds every word of the query, ignoring case: pages with every word in the title first, then by number of occurrences. Each result has the page id, title, notebook, section and up to 3 matching lines. |
 | `read_page` | `page_id` (a page id, a page address or a card ref) | The page's mirror file: front matter, then the page as Markdown. Pictures and attached files stay as links to `mirror/assets/`. |
+| `create_notebook` | `name`, `sections` (optional) | Adds a notebook at the end of the library with top-level sections of those names in order, and answers with the notebook id and each section id. A name a live notebook already has, ignoring case, is refused. |
 | `create_page` | `section_id`, `title`, `markdown` (optional) | Adds a top-level page at the end of the section, with the Markdown in one text container (no container without it), and answers with its page id, notebook and section. |
 | `append_to_page` | `page_id` (a page id, a page address or a card ref), `markdown` | Adds the Markdown after the end of the page's last text container in reading order, or in a new text container below everything else when the page has none, and marks the page modified. |
 | `list_boards` | none | Every board: its notebook, key, statuses with their kinds and card counts, and labels. |

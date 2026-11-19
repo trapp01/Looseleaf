@@ -377,7 +377,7 @@ server prefix:
 | Tool | What it does |
 | --- | --- |
 | `list_notebooks`, `list_pages`, `search_notes`, `read_page` | Read the notes from the mirror, as below. `read_page` takes a page id, a page address or a card ref. |
-| `create_page`, `append_to_page` | Add to the notes, as below. `append_to_page` takes a page id, a page address or a card ref. |
+| `create_notebook`, `create_page`, `append_to_page` | Add to the notes, as below. `append_to_page` takes a page id, a page address or a card ref. |
 | `list_boards` | Every board: its key, its notebook's name, and its cards per status. |
 | `get_board` | One board, named by key or notebook name: the Inbox lane, then each status with its cards (`renderBoard`). Narrowed to one status or label, the Inbox is left out. |
 | `search_cards` | Cards by words (title, page text, labels, comments, links), status, label and due day, across boards or on one. |
@@ -412,7 +412,9 @@ page's file. Files are read only at paths the manifest lists, through
 `MirrorFolder.readText`, which refuses a path that resolves outside the
 folder.
 
-The notes write tools never touch the mirror. `create_page` adds a top-level page
+The notes write tools never touch the mirror. `create_notebook` adds a notebook
+at the end of the library with top-level sections in order, and refuses a name
+a live notebook already has. `create_page` adds a top-level page
 at the end of a section, with its Markdown in one text container;
 `append_to_page` adds Markdown after the end of the page's last text
 container in reading order (or, on a page with none, in a new text container

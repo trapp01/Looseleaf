@@ -119,7 +119,7 @@ Status: **built**, **partial** (note says what is missing), **planned**,
 | Offline editing with merge on reconnect | built | |
 | Export page, section, notebook or library to HTML, Markdown, text, JSON | built | |
 | Markdown mirror of every page on the server (`data/mirror`) | built | Read-only, rewritten about 5 seconds after an edit. `LOOSELEAF_MIRROR=off` turns it off. The desktop app keeps the same mirror of its own replica in a folder chosen in Settings, while it is open. |
-| MCP endpoint for AI assistants (`POST /mcp`) | built | List notebooks and pages, search, read a page, create a page from Markdown, and add Markdown to the end of a page. Nothing already in the notes is changed or removed. Needs the server mirror on. |
+| MCP endpoint for AI assistants (`POST /mcp`) | built | List notebooks and pages, search, read a page, create a notebook with its sections, create a page from Markdown, and add Markdown to the end of a page. Nothing already in the notes is changed or removed. Needs the server mirror on. |
 | Import `.one` section files and notebook folders | partial | Ink is not read, and files downloaded from OneDrive use a packaging that is not read yet. See `packages/onenote/README.md`. |
 | Export to `.one` | planned | No open-source writer exists yet. |
 | Kanban board per notebook, with cards that are pages | planned | The doc model is built; what works is tracked in [board-parity.md](board-parity.md). |

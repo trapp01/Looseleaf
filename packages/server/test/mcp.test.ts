@@ -176,7 +176,7 @@ describe('the MCP endpoint, through the SDK client', () => {
     const client = await mcpClient(server);
     expect(client.getServerVersion()).toEqual({ name: 'looseleaf', version: SERVER_VERSION });
     expect(client.getServerCapabilities()).toEqual({ tools: {} });
-    expect(client.getInstructions()).toContain('neither changes or removes anything');
+    expect(client.getInstructions()).toContain('none of them changes or removes anything');
     expect(client.getInstructions()).toContain('move_card it to a status of kind doing');
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name)).toEqual([
@@ -184,6 +184,7 @@ describe('the MCP endpoint, through the SDK client', () => {
       'list_pages',
       'search_notes',
       'read_page',
+      'create_notebook',
       'create_page',
       'append_to_page',
       'list_boards',
@@ -208,8 +209,9 @@ describe('the MCP endpoint, through the SDK client', () => {
       expect(tool.annotations).toEqual({ readOnlyHint: readOnly.includes(tool.name) });
       expect(tool.description).not.toBe('');
     }
-    expect(tools[4]!.inputSchema.required).toEqual(['section_id', 'title']);
-    expect(tools[5]!.inputSchema.required).toEqual(['page_id', 'markdown']);
+    expect(tools[4]!.inputSchema.required).toEqual(['name']);
+    expect(tools[5]!.inputSchema.required).toEqual(['section_id', 'title']);
+    expect(tools[6]!.inputSchema.required).toEqual(['page_id', 'markdown']);
     expect(tools[2]!.inputSchema.required).toEqual(['query']);
     expect(tools[2]!.inputSchema.properties!.limit).toMatchObject({ type: 'integer', minimum: 1, maximum: SEARCH_MAX_LIMIT });
     expect(await client.ping()).toEqual({});

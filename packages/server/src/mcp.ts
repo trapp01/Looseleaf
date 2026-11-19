@@ -20,9 +20,10 @@ const INSTRUCTIONS = [
   "These tools read and add to the user's own notes on their Looseleaf server, as Markdown, and keep the kanban boards " +
     'that show what is being worked on, by the user and by AI agents. ' +
     'list_notebooks gives notebook and section ids, list_pages gives the page ids in a section, search_notes finds ' +
-    'pages by words in their title or text, and read_page returns one page by its id. create_page adds a page at the ' +
-    'end of a section and append_to_page adds text to the end of a page; neither changes or removes anything already ' +
-    'in the notes. A write shows in the read tools a few seconds after it is made.',
+    'pages by words in their title or text, and read_page returns one page by its id. create_notebook makes a notebook ' +
+    'with its sections, create_page adds a page at the end of a section and append_to_page adds text to the end of a ' +
+    'page; none of them changes or removes anything already in the notes. A write shows in the read tools a few ' +
+    'seconds after it is made.',
   'Looseleaf is where the notes and context that outlast a task are kept. When your work produces something the user ' +
     'would want to read in a month, such as a plan, what an investigation found, a decision and its reason, or how to ' +
     'test something, write it to a page without being asked. A small fix needs no page.',

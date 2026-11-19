@@ -13,12 +13,14 @@ import {
   deleteNode,
   deleteNotebook,
   getNode,
+  listNotebooks,
   notebookDocId,
   pageDocId,
   readPage,
   readTree,
   type JSONContent,
   type MirrorPage,
+  type SectionEntry,
 } from '@looseleaf/model';
 import { DiskStore } from '../src/disk-store.js';
 import { Hub } from '../src/hub.js';
@@ -130,6 +132,29 @@ async function writableLibrary() {
 const paragraphTexts = (body: JSONContent): string[] => (body.content ?? []).map((block) => (block.content ?? []).map((n) => n.text ?? '').join(''));
 
 describe('the MCP write tools', () => {
+  it('create_notebook adds a notebook at the end of the library with its sections in order', async () => {
+    const { store, ids, run } = await writableLibrary();
+    const { text, isError } = await run('create_notebook', { name: ' Kitchen\nnotes ', sections: ['Recipes', ' Shopping '] });
+    expect(isError).toBe(false);
+    const notebooks = listNotebooks(await docFromStore(store, LIBRARY_DOC_ID));
+    expect(notebooks.map((n) => n.name)).toEqual(['Garden', 'Kitchen notes']);
+    const id = notebooks[1]!.id;
+    const sections = readTree(await docFromStore(store, notebookDocId(id))).children as SectionEntry[];
+    expect(sections.map((s) => [s.name, s.pages.length])).toEqual([['Recipes', 0], ['Shopping', 0]]);
+    expect(text).toBe(
+      `Created the notebook Kitchen notes (notebook id: ${id}).\n` +
+        `  Recipes (section id: ${sections[0]!.id})\n` +
+        `  Shopping (section id: ${sections[1]!.id})`,
+    );
+    // A deleted notebook's name is free to use again.
+    const reused = await run('create_notebook', { name: 'Attic' });
+    expect(reused.isError).toBe(false);
+    expect(reused.text).toContain('It has no sections yet');
+    const live = listNotebooks(await docFromStore(store, LIBRARY_DOC_ID));
+    expect(live.map((n) => n.name)).toEqual(['Garden', 'Kitchen notes', 'Attic']);
+    expect(live[2]!.id).not.toBe(ids.attic);
+  });
+
   it('create_page adds a page at the end of the section with the Markdown in one text container', async () => {
     const { store, ids, run } = await writableLibrary();
     const before = Date.now();
@@ -191,6 +216,10 @@ describe('the MCP write tools', () => {
     const records = async () => Promise.all(docs.map(async (docId) => (await store.readUpdates(docId)).length));
     const counts = await records();
     const cases: Array<[string, Record<string, unknown>, string]> = [
+      ['create_notebook', { name: 'garden' }, 'A notebook called "Garden" already exists'],
+      ['create_notebook', { name: ' \n ' }, 'The name is empty'],
+      ['create_notebook', { name: 'Kitchen', sections: ['Recipes', ' '] }, 'A section name is empty'],
+      ['create_notebook', {}, 'needs the argument "name"'],
       ['create_page', { section_id: 'nope', title: 'T' }, 'No section has the id "nope". Call list_notebooks'],
       ['create_page', { section_id: ids.planting, title: 'T' }, `No section has the id "${ids.planting}"`],
       ['create_page', { section_id: ids.old, title: 'T', markdown: 'x' }, 'is in Deleted notes. Pick another section'],

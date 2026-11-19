@@ -2,8 +2,8 @@
  * The MCP notes tools. The read tools read a running mirror: pages, their
  * order and ids come from the mirror manifest, and text comes from the
  * mirror's page files, read through `MirrorView.readText`. With the mirror
- * off they answer that they need it. The write tools (create_page,
- * append_to_page) change the docs through `NotesWriter`, and the mirror shows
+ * off they answer that they need it. The write tools (create_notebook,
+ * create_page, append_to_page) change the docs through `NotesWriter`, and the mirror shows
  * the change after its delay. `read_page` and `append_to_page` also take a
  * card ref, which `Boards` turns into the card's page id.
  */
@@ -110,6 +110,37 @@ export const NOTES_TOOLS: readonly McpTool[] = [
     },
   },
   {
+    name: 'create_notebook',
+    description:
+      'Creates a notebook at the end of the library, with top-level sections of the given names in order, and answers ' +
+      'with the notebook id and each section id. list_notebooks leaves out a notebook until it has a page, so keep the ' +
+      'ids from the answer. A name another notebook already has is refused.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'The notebook name.' },
+        sections: { type: 'array', items: { type: 'string' }, description: 'Names of sections to make in it, in order. None when left out.' },
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+    annotations: writes,
+    async run({ writer }, args) {
+      const name = oneLine(args.name as string);
+      if (name === '') return failure('The name is empty. Give the notebook a name.');
+      const sections = ((args.sections as string[] | undefined) ?? []).map(oneLine);
+      if (sections.some((section) => section === '')) return failure('A section name is empty. Give every section a name.');
+      const outcome = await writer.createNotebook({ name, sections });
+      if (outcome.kind === 'name-taken') {
+        return failure(`A notebook called "${outcome.name}" already exists. Use it, or pick another name.`);
+      }
+      const lines = [`Created the notebook ${outcome.notebook.name} (notebook id: ${outcome.notebook.id}).`];
+      if (outcome.sections.length === 0) lines.push('It has no sections yet; a board made on it files cards in its Unfiled section.');
+      for (const section of outcome.sections) lines.push(`  ${section.name} (section id: ${section.id})`);
+      return success(lines.join('\n'));
+    },
+  },
+  {
     name: 'create_page',
     description:
       'Creates a new page at the end of a section, with a title and optional Markdown text, and answers with its page ' +
@@ -127,7 +158,7 @@ export const NOTES_TOOLS: readonly McpTool[] = [
     },
     annotations: writes,
     async run({ writer }, args) {
-      const title = (args.title as string).replace(/\s*[\r\n]+\s*/g, ' ').trim();
+      const title = oneLine(args.title as string);
       if (title === '') return failure('The title is empty. Give the page a title.');
       const markdown = args.markdown as string | undefined;
       const outcome = await writer.createPage({
@@ -353,6 +384,11 @@ function mirrorManifest({ mirror }: McpContext): MirrorManifest | string {
 /** The page a caller named by a page id, a page address or a card ref. */
 function pageIdFor({ boards }: McpContext, text: string): Promise<string> {
   return boards.pageId(text);
+}
+
+/** A name or title on one line: line breaks become spaces and the ends are trimmed. */
+function oneLine(text: string): string {
+  return text.replace(/\s*[\r\n]+\s*/g, ' ').trim();
 }
 
 function success(text: string): McpToolResult {
